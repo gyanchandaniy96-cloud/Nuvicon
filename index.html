@@ -39,7 +39,7 @@ nav button.on{color:var(--ink);box-shadow:inset 0 3px 0 var(--acc)}
 var U="https://ptbaxvqvwhgowflxzqmh.supabase.co",K="sb_publishable_QeRuu6oa6UKMuPTaIjgLcg_BuX-n2dI";
 var sb=window.supabase.createClient(U,K);
 var FLOW=["placed","staged","picked_up","in_transit","delivered"],LBL={placed:"Placed",staged:"Staged",picked_up:"Picked up",in_transit:"In transit",delivered:"Delivered",cancelled:"Cancelled"};
-var S={user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",partners:[],vehicles:[],rates:[],zones:[],pf:{name:"",phone:""},zonef:"",cfg:{hours:[],force:false,low:20,city:"Pusad",gkey:"",godown:null,rad:30,dfee:0},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
+var S={credit:[],cf:{phone:"",sd:""},user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",partners:[],vehicles:[],rates:[],zones:[],pf:{name:"",phone:""},zonef:"",cfg:{onl:false,rzk:"",hours:[],force:false,low:20,city:"Pusad",gkey:"",godown:null,rad:30,dfee:0},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
 function esc(t){return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}
 function fmt(n){return "₹"+Math.round(Number(n)).toLocaleString("en-IN")}
 function toast(m){var t=document.getElementById("toast");t.innerHTML='<div class="toast">'+esc(m)+'</div>';setTimeout(function(){t.innerHTML=""},2500)}
@@ -76,20 +76,20 @@ function orderCard(o){
  var c=o.profiles||{};
  return '<div class="card"><div class="flex" data-a="tog" data-id="'+o.id+'" style="cursor:pointer"><div><b>#'+esc(o.order_no)+'</b> <span class="pill '+o.status+'">'+LBL[o.status]+'</span><br><small>'+esc(c.full_name||c.phone||"Customer")+', '+esc((o.zones&&o.zones.name)||o.area_text||"")+(o.distance_km!=null?' ('+o.distance_km+' km)':'')+', '+dt(o.created_at)+'</small></div><b>'+fmt(o.total)+'</b></div>'+
  (op?'<div class="items">'+o.order_items.map(function(l){return esc(l.qty)+' × '+esc(l.product_name)+' ('+esc(l.variant_label)+') '+fmt(l.unit_price*l.qty)}).join("<br>")+'<br><small>Subtotal '+fmt(o.subtotal)+' + GST '+fmt(o.gst_total)+'</small></div>'+
- '<div><small>Phone: <a href="tel:+'+esc(c.phone)+'">'+esc(c.phone)+'</a><br>Address: '+esc(o.address||"-")+(o.distance_km!=null?'<br>Godown se '+o.distance_km+' km':'')+(o.delivery_lat!=null?' <a href="https://www.google.com/maps/dir/?api=1&destination='+o.delivery_lat+','+o.delivery_lng+'" target="_blank" rel="noopener">Map</a>':'')+'<br>Payment: '+esc(o.pay_method==="on_delivery"?"On delivery":"Online")+', '+esc(o.pay_status)+(o.cod_collected!=null?', collected '+fmt(o.cod_collected):'')+'<br>Partner: '+esc(o.partners?o.partners.name+" (+"+o.partners.phone+")"+(o.vehicles?", "+o.vehicles.reg_no:"")+", fee "+fmt(o.partner_fee||0):"abhi assign nahi")+'</small>'+(o.status!=="delivered"&&o.status!=="cancelled"?'<br><button class="btn ghost sm" data-a="asg" data-id="'+o.id+'" style="margin-top:6px">'+(o.partners?"Partner badlo":"Partner assign karo")+'</button>':'')+'</div>':'')+
+ '<div><small>Phone: <a href="tel:+'+esc(c.phone)+'">'+esc(c.phone)+'</a><br>Address: '+esc(o.address||"-")+(o.distance_km!=null?'<br>Godown se '+o.distance_km+' km':'')+(o.delivery_lat!=null?' <a href="https://www.google.com/maps/dir/?api=1&destination='+o.delivery_lat+','+o.delivery_lng+'" target="_blank" rel="noopener">Map</a>':'')+'<br>Payment: '+esc(o.pay_method==="on_delivery"?"On delivery":o.pay_method==="credit"?"Credit":"Online")+', <b'+(o.pay_method==="online"&&o.pay_status!=="paid"?' style="color:#b3392f"':'')+'>'+esc(o.pay_status)+(o.pay_method==="online"&&o.pay_status==="pending"?' (payment ka wait)':'')+'</b>'+(o.cod_collected!=null?', collected '+fmt(o.cod_collected):'')+'<br>Partner: '+esc(o.partners?o.partners.name+" (+"+o.partners.phone+")"+(o.vehicles?", "+o.vehicles.reg_no:"")+", fee "+fmt(o.partner_fee||0):"not assigned yet")+'</small>'+(o.status!=="delivered"&&o.status!=="cancelled"?'<br><button class="btn ghost sm" data-a="asg" data-id="'+o.id+'" style="margin-top:6px">'+(o.partners?"Change partner":"Assign partner")+'</button>':'')+'</div>':'')+
  (nx||(o.status!=="delivered"&&o.status!=="cancelled")?'<div class="flex" style="margin-top:10px">'+(nx?'<button class="btn" data-a="st" data-id="'+o.id+'" data-s="'+nx+'">Mark '+LBL[nx]+'</button>':'<span></span>')+(o.status!=="delivered"&&o.status!=="cancelled"?'<button class="btn bad sm" data-a="st" data-id="'+o.id+'" data-s="cancelled">Cancel</button>':'')+'</div>':'')+'</div>'}
 
-function loadScript(u){return new Promise(function(res,rej){var t=document.createElement("script");t.src=u;t.onload=res;t.onerror=function(){rej(new Error("Load nahi hua: "+u))};document.head.appendChild(t)})}
+function loadScript(u){return new Promise(function(res,rej){var t=document.createElement("script");t.src=u;t.onload=res;t.onerror=function(){rej(new Error("Could not load: "+u))};document.head.appendChild(t)})}
 function cats(){var c=[];S.inv.forEach(function(v){if(c.indexOf(v.products.category)<0)c.push(v.products.category)});return c}
 function bulkV(){
  var B=S.bulk,vs=S.inv.filter(function(v){return B.cat==="all"||v.products.category===B.cat});
  var n=Object.keys(B.vals).filter(function(k){return B.vals[k]!==""&&!isNaN(+B.vals[k])}).length;
  return '<h1>Bulk stock</h1><button class="btn ghost sm" data-a="go" data-id="stock">&larr; Inventory</button>'+
  '<div class="chips"><button class="chip'+(B.mode==="add"?' on':'')+'" data-a="bmode" data-id="add">Add received</button><button class="chip'+(B.mode==="set"?' on':'')+'" data-a="bmode" data-id="set">Set exact count</button></div>'+
- '<small>'+(B.mode==="add"?'Jo quantity aayi wo likho, current stock mein judegi.':'Godown ki asli ginti likho, stock wahi ho jayega.')+'</small>'+
+ '<small>'+(B.mode==="add"?'Enter the quantity received; it will be added to current stock.':'Enter the actual count at the godown; stock will be set to it.')+'</small>'+
  '<div class="chips"><button class="chip'+(B.cat==="all"?' on':'')+'" data-a="bcat" data-id="all">All</button>'+cats().map(function(c){return '<button class="chip'+(B.cat===c?' on':'')+'" data-a="bcat" data-id="'+esc(c)+'">'+esc(c)+'</button>'}).join("")+'</div>'+
  vs.map(function(v){var i=v.inv||{total:0,reserved:0};
-  return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', abhi '+i.total+' (reserved '+i.reserved+')</small></div><input type="number" inputmode="numeric" min="0" data-bulk="'+v.id+'" value="'+esc(B.vals[v.id]==null?"":B.vals[v.id])+'" placeholder="0" style="width:90px;margin:0"></div>'}).join("")+
+  return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', now '+i.total+' (reserved '+i.reserved+')</small></div><input type="number" inputmode="numeric" min="0" data-bulk="'+v.id+'" value="'+esc(B.vals[v.id]==null?"":B.vals[v.id])+'" placeholder="0" style="width:90px;margin:0"></div>'}).join("")+
  '<div style="position:sticky;bottom:72px;padding-top:6px"><button class="btn" style="width:100%" data-a="bapply"'+(n?'':' disabled')+'>Update '+n+' items</button></div>'}
 function normT(s){return String(s).toLowerCase().replace(/(\d)\s*(kg|mm|ml|ltr|litre|liter|l|m)(?![a-z])/g,function(m,n,u){return n+(/^(ltr|litre|liter)$/.test(u)?"l":u)}).replace(/(\d)\s*x\s*(?=\d)/g,"$1x")}
 function reEsc(t){return t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
@@ -129,14 +129,14 @@ async function pdfLines(f){
   lines=lines.map(function(l){return l.p?l.p.sort(function(a,b){return a.x-b.x}).map(function(i){return i.s}).join(" "):l})}
  return lines}
 async function processBill(f){
- var b=S.bill;b.busy=true;b.err="";b.rows=[];b.done=false;b.name=f.name;b.msg="Bill padh raha hoon…";render();
+ var b=S.bill;b.busy=true;b.err="";b.rows=[];b.done=false;b.name=f.name;b.msg="Reading the bill…";render();
  try{
   var lines;
   if(f.type==="application/pdf"||/\.pdf$/i.test(f.name)){
    lines=await pdfLines(f);
-   if(!lines.length){b.err="Is PDF mein text nahi mila (scanned lagta hai). Uska screenshot ya photo upload karo."}}
+   if(!lines.length){b.err="No text found in this PDF (it looks scanned). Upload a screenshot or photo of it instead."}}
   else{
-   b.msg="Photo se text nikal raha hoon (1-2 minute lag sakte hain)…";render();
+   b.msg="Reading text from the photo (can take 1-2 minutes)…";render();
    if(!window.Tesseract)await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js");
    var r=await Tesseract.recognize(f,"eng");lines=r.data.text.split("\n")}
   if(lines&&lines.length)b.rows=parseLines(lines,S.inv)
@@ -144,23 +144,23 @@ async function processBill(f){
  b.busy=false;b.done=true;render()}
 function billV(){
  var b=S.bill;
- return '<h1>Upload bill</h1><button class="btn ghost sm" data-a="go" data-id="stock">&larr; Inventory</button><p><small>Supplier ka bill (PDF ya photo) chuno. Pehle review dikhega, tabhi stock mein judega.</small></p>'+
+ return '<h1>Upload bill</h1><button class="btn ghost sm" data-a="go" data-id="stock">&larr; Inventory</button><p><small>Choose the supplier’s bill (PDF or photo). You will review it first, and only then is stock updated.</small></p>'+
  '<input type="file" id="billfile" accept="application/pdf,image/*">'+
  (b.busy?'<div class="empty">'+esc(b.msg)+'</div>':'')+(b.err?'<div class="err">'+esc(b.err)+'</div>':'')+
- (b.done&&!b.busy?'<h1 style="font-size:16px">Review: '+b.rows.length+' items mile</h1><small>'+esc(b.name)+'. Har quantity bill se milao, galat ho to theek karo.</small>'+
-  (b.rows.length?'':'<div class="empty">Koi item match nahi hua. Neeche "+ Row" se haath se jodo.</div>')+
+ (b.done&&!b.busy?'<h1 style="font-size:16px">Review: '+b.rows.length+' items mile</h1><small>'+esc(b.name)+'. Check every quantity against the bill and fix any that are wrong.</small>'+
+  (b.rows.length?'':'<div class="empty">No items matched. Add them by hand with "+ Row" below.</div>')+
   b.rows.map(function(r,i){return '<div class="card"><select data-bi="'+i+'" data-f="v"><option value="">— skip —</option>'+S.inv.map(function(v){return '<option value="'+v.id+'"'+(String(v.id)===String(r.v)?' selected':'')+'>'+esc(v.products.brand+" "+v.products.name+" - "+v.label)+'</option>'}).join("")+'</select>'+
-   '<div class="flex"><input type="number" inputmode="numeric" min="0" data-bi="'+i+'" data-f="q" value="'+esc(r.q)+'" placeholder="Qty" style="width:110px;margin:0"><button class="btn bad sm" data-a="brm" data-id="'+i+'">Hatao</button></div>'+(r.raw?'<small>Bill line: '+esc(r.raw)+'</small>':'')+'</div>'}).join("")+
-  '<div class="flex" style="margin-top:8px"><button class="btn ghost" data-a="baddrow">+ Row</button><button class="btn" data-a="bsave">Stock mein jodo</button></div>':'')}
+   '<div class="flex"><input type="number" inputmode="numeric" min="0" data-bi="'+i+'" data-f="q" value="'+esc(r.q)+'" placeholder="Qty" style="width:110px;margin:0"><button class="btn bad sm" data-a="brm" data-id="'+i+'">Remove</button></div>'+(r.raw?'<small>Bill line: '+esc(r.raw)+'</small>':'')+'</div>'}).join("")+
+  '<div class="flex" style="margin-top:8px"><button class="btn ghost" data-a="baddrow">+ Row</button><button class="btn" data-a="bsave">Add to stock</button></div>':'')}
 
-function why(msg,req){var r=prompt(msg+"\nKaaran likho"+(req?" (zaroori)":" (optional)"));if(r===null)return null;r=r.trim();if(req&&!r){alert("Kaaran zaroori hai");return null}return r}
-var ALBL={price_change:"Price change",gst_change:"GST change",stock_received:"Stock received",bulk_stock:"Bulk stock",bill_stock:"Bill stock",visibility:"Show / Hide",order_status:"Order status",order_note:"Order note",staff_role:"Staff role",staff_invited:"Staff invited",partner_assigned:"Partner assigned",partner_added:"Partner added",partner_status:"Partner status",vehicle_added:"Vehicle added",vehicle_status:"Vehicle status",rate_card:"Rate card",store_hours:"Store timing",store_setting:"Store setting",zone_change:"Zone",low_stock:"Low stock limit"};
+function why(msg,req){var r=prompt(msg+"\nEnter a reason"+(req?" (zaroori)":" (optional)"));if(r===null)return null;r=r.trim();if(req&&!r){alert("A reason is required");return null}return r}
+var ALBL={credit_set:"Credit set",credit_payment:"Credit payment",payment_received:"Online payment",payment_after_cancel:"Payment after cancel",price_change:"Price change",gst_change:"GST change",stock_received:"Stock received",bulk_stock:"Bulk stock",bill_stock:"Bill stock",visibility:"Show / Hide",order_status:"Order status",order_note:"Order note",staff_role:"Staff role",staff_invited:"Staff invited",partner_assigned:"Partner assigned",partner_added:"Partner added",partner_status:"Partner status",vehicle_added:"Vehicle added",vehicle_status:"Vehicle status",rate_card:"Rate card",store_hours:"Store timing",store_setting:"Store setting",zone_change:"Zone",low_stock:"Low stock limit"};
 var DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 async function loadCfg(){
  var h=await sb.from("store_hours").select("day,is_open,opens,closes").order("day");
  var st=await sb.from("settings").select("key,value");
  if(h.data)S.cfg.hours=h.data;
- if(st.data)st.data.forEach(function(x){if(x.key==="force_closed")S.cfg.force=(x.value===true||x.value==="true");if(x.key==="low_stock_threshold")S.cfg.low=Number(x.value)||20;if(x.key==="city"&&x.value)S.cfg.city=String(x.value);if(x.key==="gmaps_key")S.cfg.gkey=x.value?String(x.value):"";if(x.key==="godown"&&x.value&&x.value.lat!=null)S.cfg.godown={lat:+x.value.lat,lng:+x.value.lng};if(x.key==="max_radius_km")S.cfg.rad=Number(x.value)||0;if(x.key==="default_partner_fee")S.cfg.dfee=Number(x.value)||0})}
+ if(st.data)st.data.forEach(function(x){if(x.key==="force_closed")S.cfg.force=(x.value===true||x.value==="true");if(x.key==="low_stock_threshold")S.cfg.low=Number(x.value)||20;if(x.key==="city"&&x.value)S.cfg.city=String(x.value);if(x.key==="online_pay")S.cfg.onl=(x.value===true||x.value==="true");if(x.key==="rzp_key_id")S.cfg.rzk=x.value?String(x.value):"";if(x.key==="gmaps_key")S.cfg.gkey=x.value?String(x.value):"";if(x.key==="godown"&&x.value&&x.value.lat!=null)S.cfg.godown={lat:+x.value.lat,lng:+x.value.lng};if(x.key==="max_radius_km")S.cfg.rad=Number(x.value)||0;if(x.key==="default_partner_fee")S.cfg.dfee=Number(x.value)||0})}
 async function loadStaff(){
  var p=await sb.from("profiles").select("id,full_name,phone,role").in("role",["staff","admin"]).order("created_at");
  var i=await sb.from("staff_invites").select("phone,role,full_name");
@@ -194,13 +194,13 @@ function sumry(a){var d=a.details||{};
  case"partner_added":return d.name||"";
  case"partner_status":return (d.name||"")+" → "+d.to;
  case"vehicle_added":return (d.reg||"")+" ("+(d.partner||"")+")";
- case"vehicle_status":return (d.reg||"")+": "+(d.active?"Chalu":"Band");
+ case"vehicle_status":return (d.reg||"")+": "+(d.active?"Active":"Inactive");
  case"rate_card":return (d.zone||"")+": "+(d.from==null?"-":fmt(d.from))+" → "+fmt(d.to);
  default:var c=Object.assign({},d);delete c.reason;var t=JSON.stringify(c);return t.length>90?t.slice(0,90)+"…":t}}
 function backBtn(){return '<button class="btn ghost sm" data-a="go" data-id="more">&larr; More</button>'}
 function moreV(){
  var it=function(id,t,sub){return '<div class="card flex" data-a="go" data-id="'+id+'" style="cursor:pointer"><div><b>'+t+'</b><br><small>'+sub+'</small></div><span>&rsaquo;</span></div>'};
- return '<h1>More</h1>'+(S.role==="admin"?it("staff","Staff","Team jodo, role badlo")+it("settings","Settings","Store timing, band/chalu, low stock limit")+it("partners","Partners","Transport wale, gaadiyan, rate card"):"")+it("audit","Audit log","Har badlav ka record")+'<div class="card flex" data-a="out" style="cursor:pointer"><b>Log out</b><span>&rsaquo;</span></div>'}
+ return '<h1>More</h1>'+(S.role==="admin"?it("staff","Staff","Add team members, change roles")+it("settings","Settings","Store timing, open/close, low stock limit")+it("partners","Partners","Transporters, vehicles, rate card")+it("credit","Credit customers","Credit customers, SD and outstanding"):"")+it("audit","Audit log","Har badlav ka record")+'<div class="card flex" data-a="out" style="cursor:pointer"><b>Log out</b><span>&rsaquo;</span></div>'}
 function auditV(){
  var f=S.af,q=f.q.toLowerCase(),users={},acts={};
  S.audit.forEach(function(a){if(a.user_id)users[a.user_id]=1;acts[a.action]=1});
@@ -208,32 +208,33 @@ function auditV(){
   if(f.user&&a.user_id!==f.user)return false;if(f.act&&a.action!==f.act)return false;
   if(q){var p=S.profs[a.user_id]||{},t=(entLabel(a)+" "+sumry(a)+" "+((a.details||{}).reason||"")+" "+(p.full_name||"")+" "+(p.phone||"")).toLowerCase();if(t.indexOf(q)<0)return false}
   return true});
- return '<h1>Audit log</h1>'+backBtn()+'<div class="card" style="background:#f6f5f1;margin-top:8px"><small>Yeh log sirf badhta hai. Isme koi bhi, admin bhi, kuch badal ya hata nahi sakta.</small></div>'+
+ return '<h1>Audit log</h1>'+backBtn()+'<div class="card" style="background:#f6f5f1;margin-top:8px"><small>This log only grows. Nobody, not even an admin, can change or delete an entry.</small></div>'+
  '<input id="aq" data-af="q" placeholder="Search entries" value="'+esc(f.q)+'">'+
  '<select data-af="user"><option value="">All users</option>'+Object.keys(users).map(function(u){var p=S.profs[u]||{};return '<option value="'+u+'"'+(f.user===u?' selected':'')+'>'+esc(p.full_name||p.phone||u)+'</option>'}).join("")+'</select>'+
  '<select data-af="act"><option value="">All actions</option>'+Object.keys(acts).map(function(x){return '<option value="'+x+'"'+(f.act===x?' selected':'')+'>'+esc(ALBL[x]||x)+'</option>'}).join("")+'</select>'+
  '<small>'+list.length+' entries</small><div style="margin-top:8px"></div>'+
  (S.loadErr?'<div class="err">'+esc(S.loadErr)+'</div>':'')+
  (list.length?list.map(function(a){var p=S.profs[a.user_id]||{},r=(a.details||{}).reason;
-  return '<div class="card"><div class="flex"><span class="pill">'+esc(ALBL[a.action]||a.action)+'</span><small>'+dt(a.at)+'</small></div><div style="margin-top:6px"><b>'+esc(entLabel(a))+'</b><br>'+esc(sumry(a))+'</div><small>'+esc(p.full_name||(p.phone?"+"+p.phone:"System"))+(p.role?' ('+esc(p.role)+')':'')+'</small>'+(r?'<br><small>Kaaran: '+esc(r)+'</small>':'')+'</div>'}).join(""):'<div class="empty">Koi entry nahi.</div>')}
+  return '<div class="card"><div class="flex"><span class="pill">'+esc(ALBL[a.action]||a.action)+'</span><small>'+dt(a.at)+'</small></div><div style="margin-top:6px"><b>'+esc(entLabel(a))+'</b><br>'+esc(sumry(a))+'</div><small>'+esc(p.full_name||(p.phone?"+"+p.phone:"System"))+(p.role?' ('+esc(p.role)+')':'')+'</small>'+(r?'<br><small>Kaaran: '+esc(r)+'</small>':'')+'</div>'}).join(""):'<div class="empty">No entries.</div>')}
 function staffV(){
  var sf=S.sf;
  return '<h1>Staff</h1>'+backBtn()+
- '<div class="card" style="margin-top:8px"><b>Naya staff jodo</b><input data-sf="name" placeholder="Naam" value="'+esc(sf.name)+'" style="margin-top:8px"><input data-sf="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" value="'+esc(sf.phone)+'"><select data-sf="role"><option value="staff"'+(sf.role==="staff"?' selected':'')+'>Staff</option><option value="admin"'+(sf.role==="admin"?' selected':'')+'>Admin</option></select><button class="btn" data-a="sadd">Jodo</button><br><small>Is number se OTP login karte hi woh staff ban jayega.</small></div>'+
- (S.invites.length?'<h1 style="font-size:16px">Pending</h1>'+S.invites.map(function(i){return '<div class="card flex"><div><b>'+esc(i.full_name||"(naam nahi)")+'</b> <span class="pill">'+esc(i.role)+'</span><br><small>+'+esc(i.phone)+', abhi login nahi kiya</small></div><button class="btn bad sm" data-a="sinv" data-id="'+esc(i.phone)+'">Hatao</button></div>'}).join(""):"")+
+ '<div class="card" style="margin-top:8px"><b>Add a new staff member</b><input data-sf="name" placeholder="Name" value="'+esc(sf.name)+'" style="margin-top:8px"><input data-sf="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" value="'+esc(sf.phone)+'"><select data-sf="role"><option value="staff"'+(sf.role==="staff"?' selected':'')+'>Staff</option><option value="admin"'+(sf.role==="admin"?' selected':'')+'>Admin</option></select><button class="btn" data-a="sadd">Add</button><br><small>They become staff as soon as they log in with OTP on this number.</small></div>'+
+ (S.invites.length?'<h1 style="font-size:16px">Pending</h1>'+S.invites.map(function(i){return '<div class="card flex"><div><b>'+esc(i.full_name||"(no name)")+'</b> <span class="pill">'+esc(i.role)+'</span><br><small>+'+esc(i.phone)+', has not logged in yet</small></div><button class="btn bad sm" data-a="sinv" data-id="'+esc(i.phone)+'">Remove</button></div>'}).join(""):"")+
  '<h1 style="font-size:16px">Team</h1>'+(S.loadErr?'<div class="err">'+esc(S.loadErr)+'</div>':'')+
- S.staff.map(function(p){return '<div class="card flex"><div><b>'+esc(p.full_name||"(naam nahi)")+'</b> <span class="pill '+(p.role==="admin"?'staged':'')+'">'+esc(p.role)+'</span><br><small>+'+esc(p.phone)+'</small></div><div><button class="btn sm" data-a="srole" data-id="'+p.id+'">Role</button> <button class="btn ghost sm" data-a="sname" data-id="'+p.id+'">Naam</button></div></div>'}).join("")}
+ S.staff.map(function(p){return '<div class="card flex"><div><b>'+esc(p.full_name||"(no name)")+'</b> <span class="pill '+(p.role==="admin"?'staged':'')+'">'+esc(p.role)+'</span><br><small>+'+esc(p.phone)+'</small></div><div><button class="btn sm" data-a="srole" data-id="'+p.id+'">Role</button> <button class="btn ghost sm" data-a="sname" data-id="'+p.id+'">Rename</button></div></div>'}).join("")}
 function settingsV(){
  var c=S.cfg;
  return '<h1>Settings</h1>'+backBtn()+
- '<div class="card flex" style="margin-top:8px"><div><b>Store '+(c.force?'abhi band hai':'chalu hai')+'</b><br><small>Band karte hi naye orders ruk jayenge.</small></div><button class="btn '+(c.force?'':'bad ')+'sm" data-a="sforce">'+(c.force?'Kholo':'Band karo')+'</button></div>'+
- '<div class="card"><b>Store timing</b>'+c.hours.map(function(h){return '<div class="flex" style="margin:8px 0"><span style="width:78px">'+DAYS[h.day].slice(0,3)+'</span><label><input type="checkbox" data-sh="'+h.day+'" data-f="open"'+(h.is_open?' checked':'')+' style="width:auto;margin:0"> Open</label><input type="time" data-sh="'+h.day+'" data-f="opens" value="'+esc(String(h.opens).slice(0,5))+'" style="width:105px;margin:0"><input type="time" data-sh="'+h.day+'" data-f="closes" value="'+esc(String(h.closes).slice(0,5))+'" style="width:105px;margin:0"></div>'}).join("")+'<button class="btn" data-a="shsave">Timing save karo</button></div>'+
- '<div class="card"><b>Google Maps key</b><br><small>Customer app ka map isi key se chalta hai. Key ya Godown ki location khali ho, to purana zone-wala tarika chalta hai.</small><input id="gmk" value="'+esc(c.gkey)+'" placeholder="AIza..." style="margin-top:8px"><button class="btn" data-a="sgm">Save</button></div>'+
- '<div class="card"><b>Godown ki location</b><br><small>Yahin se customer ki doori nikalti hai. Godown pe khade hoke "Meri location" dabao.</small><input id="glat" inputmode="decimal" placeholder="Latitude (jaise 19.9012)" value="'+(c.godown?c.godown.lat:"")+'" style="margin-top:8px"><input id="glng" inputmode="decimal" placeholder="Longitude (jaise 77.5701)" value="'+(c.godown?c.godown.lng:"")+'"><div class="flex"><button class="btn ghost sm" data-a="gmy">Meri location</button><button class="btn sm" data-a="sgd">Save</button></div>'+(c.godown?'<div style="margin-top:8px"><a href="https://www.google.com/maps?q='+c.godown.lat+','+c.godown.lng+'" target="_blank" rel="noopener">Google Map pe dekho</a></div>':'')+'</div>'+
- '<div class="card"><b>Max delivery doori (km)</b><br><small>Godown se itne km se door ke orders customer app nahi lega. 0 likho to limit nahi.</small><input id="radv" type="number" inputmode="numeric" value="'+c.rad+'" style="margin-top:8px"><button class="btn" data-a="srad">Save</button></div>'+
- '<div class="card"><b>Shehar / Godown</b><br><small>Customer app mein "Construction materials from our ___ Godown" aur partner ke map mein yahi naam aata hai.</small><input id="cityv" value="'+esc(c.city)+'" style="margin-top:8px"><button class="btn" data-a="scity">Save</button></div>'+
- '<div class="card"><b>Delivery zones</b><br><small>Customer yahi areas chunta hai. Purane area hide kar do, naye jodo.</small><div style="margin-top:8px"></div>'+S.zones.map(function(z){return '<div class="flex" style="margin:6px 0"><div><b>'+esc(z.name)+'</b> '+(z.active?'':'<span class="pill out">Hidden</span>')+'</div><div><button class="btn ghost sm" data-a="zren" data-id="'+z.id+'">Naam</button> <button class="btn ghost sm" data-a="zvis" data-id="'+z.id+'">'+(z.active?'Hide':'Show')+'</button></div></div>'}).join("")+'<input data-zf="1" placeholder="Naya area ka naam" value="'+esc(S.zonef)+'" style="margin-top:8px"><button class="btn" data-a="zadd">Area jodo</button></div>'+
- '<div class="card"><b>Low stock limit</b><br><small>Itne ya kam bache to "Low" dikhega.</small><input type="number" inputmode="numeric" id="lowv" value="'+c.low+'" style="margin-top:8px"><button class="btn" data-a="slow">Save</button></div>'}
+ '<div class="card flex" style="margin-top:8px"><div><b>Store '+(c.force?'is closed now':'is open')+'</b><br><small>New orders stop as soon as the store is closed.</small></div><button class="btn '+(c.force?'':'bad ')+'sm" data-a="sforce">'+(c.force?'Open':'Close')+'</button></div>'+
+ '<div class="card"><b>Store timing</b>'+c.hours.map(function(h){return '<div class="flex" style="margin:8px 0"><span style="width:78px">'+DAYS[h.day].slice(0,3)+'</span><label><input type="checkbox" data-sh="'+h.day+'" data-f="open"'+(h.is_open?' checked':'')+' style="width:auto;margin:0"> Open</label><input type="time" data-sh="'+h.day+'" data-f="opens" value="'+esc(String(h.opens).slice(0,5))+'" style="width:105px;margin:0"><input type="time" data-sh="'+h.day+'" data-f="closes" value="'+esc(String(h.closes).slice(0,5))+'" style="width:105px;margin:0"></div>'}).join("")+'<button class="btn" data-a="shsave">Save timing</button></div>'+
+ '<div class="card"><b>Online payment (Razorpay)</b><br><small>Enter the Key Id here ("rzp_test_..." or "rzp_live_..."). The secret does not go here, it goes in Supabase. Customers see the online option next to COD only when a Key Id is saved and this is switched on.</small><input id="rzk" value="'+esc(c.rzk)+'" placeholder="rzp_test_..." style="margin-top:8px"><div class="flex"><button class="btn sm" data-a="srz">Key Id save</button><button class="btn '+(c.onl?'bad ':'')+'sm" data-a="sonl">'+(c.onl?'Turn online off':'Turn online on')+'</button></div><small>Now: '+(c.onl&&c.rzk?'on':'off')+'</small></div>'+
+ '<div class="card"><b>Google Maps key</b><br><small>The customer app map runs on this key. If the key or the godown location is empty, the old zone-based method is used.</small><input id="gmk" value="'+esc(c.gkey)+'" placeholder="AIza..." style="margin-top:8px"><button class="btn" data-a="sgm">Save</button></div>'+
+ '<div class="card"><b>Godown location</b><br><small>Customer distance is measured from here. Stand at the godown and tap "My location".</small><input id="glat" inputmode="decimal" placeholder="Latitude (e.g. 19.9012)" value="'+(c.godown?c.godown.lat:"")+'" style="margin-top:8px"><input id="glng" inputmode="decimal" placeholder="Longitude (e.g. 77.5701)" value="'+(c.godown?c.godown.lng:"")+'"><div class="flex"><button class="btn ghost sm" data-a="gmy">Meri location</button><button class="btn sm" data-a="sgd">Save</button></div>'+(c.godown?'<div style="margin-top:8px"><a href="https://www.google.com/maps?q='+c.godown.lat+','+c.godown.lng+'" target="_blank" rel="noopener">View on Google Maps</a></div>':'')+'</div>'+
+ '<div class="card"><b>Max delivery distance (km)</b><br><small>The customer app will not take orders farther than this from the godown. Enter 0 for no limit.</small><input id="radv" type="number" inputmode="numeric" value="'+c.rad+'" style="margin-top:8px"><button class="btn" data-a="srad">Save</button></div>'+
+ '<div class="card"><b>City / Godown</b><br><small>This name appears in the customer app ("Construction materials from our ___ Godown") and in the partner’s map search.</small><input id="cityv" value="'+esc(c.city)+'" style="margin-top:8px"><button class="btn" data-a="scity">Save</button></div>'+
+ '<div class="card"><b>Delivery zones</b><br><small>Customers pick from these areas. Hide old areas and add new ones.</small><div style="margin-top:8px"></div>'+S.zones.map(function(z){return '<div class="flex" style="margin:6px 0"><div><b>'+esc(z.name)+'</b> '+(z.active?'':'<span class="pill out">Hidden</span>')+'</div><div><button class="btn ghost sm" data-a="zren" data-id="'+z.id+'">Rename</button> <button class="btn ghost sm" data-a="zvis" data-id="'+z.id+'">'+(z.active?'Hide':'Show')+'</button></div></div>'}).join("")+'<input data-zf="1" placeholder="New area name" value="'+esc(S.zonef)+'" style="margin-top:8px"><button class="btn" data-a="zadd">Add area</button></div>'+
+ '<div class="card"><b>Low stock limit</b><br><small>Items at or below this level show as "Low".</small><input type="number" inputmode="numeric" id="lowv" value="'+c.low+'" style="margin-top:8px"><button class="btn" data-a="slow">Save</button></div>'}
 
 async function loadPartners(){
  var a=await sb.from("partners").select("id,name,phone,status,active").order("id");
@@ -242,24 +243,37 @@ async function loadPartners(){
  var d=await sb.from("zones").select("id,name,active").order("id");
  S.partners=a.data||[];S.vehicles=b.data||[];S.rates=c.data||[];S.zones=d.data||[];
  if(a.error&&S.view==="partners")S.loadErr=a.error.message}
+async function loadCredit(){
+ var r=await sb.rpc("credit_overview");
+ if(r.error)S.loadErr=r.error.message;else S.credit=r.data||[]}
+function creditV(){
+ var cf=S.cf;
+ return '<h1>Credit customers</h1>'+backBtn()+
+ '<div class="card" style="background:#f6f5f1;margin-top:8px"><small>The credit limit equals the Security Deposit (SD). Daily cash customers are not affected. The customer must have logged in to the app once.</small></div>'+
+ '<div class="card"><b>Enable credit</b><input data-cf="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="Customer’s 10-digit number" value="'+esc(cf.phone)+'" style="margin-top:8px"><input data-cf="sd" type="number" inputmode="numeric" placeholder="Security deposit (₹)" value="'+esc(cf.sd)+'"><button class="btn" data-a="cset">Save</button></div>'+
+ (S.loadErr?'<div class="err">'+esc(S.loadErr)+'</div>':'')+
+ (S.credit.length?S.credit.map(function(c){
+  return '<div class="card"><div class="flex"><div><b>'+esc(c.name||("+"+c.phone))+'</b> <span class="pill">'+(c.enabled?'Credit on':'Off')+'</span><br><small>+'+esc(c.phone)+'</small></div></div>'+
+  '<div class="stat" style="margin:8px 0"><div><small>SD / limit</small><b>'+fmt(c.sd)+'</b></div><div><small>Outstanding</small><b'+(c.used>0?' style="color:#b3392f"':'')+'>'+fmt(c.used)+'</b></div><div><small>Available limit</small><b>'+fmt(c.available)+'</b></div></div>'+
+  '<div class="flex"><button class="btn sm" data-a="cpay" data-id="'+esc(c.phone)+'">Payment received</button><button class="btn ghost sm" data-a="csd" data-id="'+esc(c.phone)+'" data-sd="'+c.sd+'" data-en="'+(c.enabled?1:0)+'">Change SD</button><button class="btn ghost sm" data-a="ctog" data-id="'+esc(c.phone)+'" data-sd="'+c.sd+'" data-en="'+(c.enabled?1:0)+'">'+(c.enabled?'Turn off':'Turn on')+'</button></div></div>'}).join(""):'<div class="empty">No credit customers yet.</div>')}
 function partnersV(){
  var pf=S.pf,today=new Date().toISOString().slice(0,10);
  var rate=function(z){var r=S.rates.find(function(x){return x.zone_id===z});return r?Number(r.fee):null};
  return '<h1>Partners</h1>'+backBtn()+
- '<div class="card" style="margin-top:8px"><b>Naya partner jodo</b><input data-pf="name" placeholder="Transport ya driver ka naam" value="'+esc(pf.name)+'" style="margin-top:8px"><input data-pf="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" value="'+esc(pf.phone)+'"><button class="btn" data-a="padd">Jodo</button><br><small>Jodne ke baad "Approve" dabao. Partner isi number se OTP login karega.</small></div>'+
+ '<div class="card" style="margin-top:8px"><b>Add a new partner</b><input data-pf="name" placeholder="Transport company or driver name" value="'+esc(pf.name)+'" style="margin-top:8px"><input data-pf="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" value="'+esc(pf.phone)+'"><button class="btn" data-a="padd">Add</button><br><small>After adding, tap "Approve". The partner logs in with OTP on this number.</small></div>'+
  (S.loadErr?'<div class="err">'+esc(S.loadErr)+'</div>':'')+
  S.partners.map(function(p){
   var vs=S.vehicles.filter(function(v){return v.partner_id===p.id});
   return '<div class="card"><div class="flex"><div><b>'+esc(p.name)+'</b> <span class="pill '+(p.status==="approved"?'ok':p.status==="pending"?'low':'out')+'">'+esc(p.status)+'</span><br><small>+'+esc(p.phone)+'</small></div><div>'+
    (p.status!=="approved"?'<button class="btn sm" data-a="pst" data-id="'+p.id+'" data-s="approved">Approve</button>':'<button class="btn bad sm" data-a="pst" data-id="'+p.id+'" data-s="suspended">Suspend</button>')+'</div></div>'+
-   vs.map(function(v){var exp=v.insurance_expires&&v.insurance_expires<today;return '<div class="flex" style="margin-top:8px"><div><b>'+esc(v.reg_no)+'</b> <small>'+esc(v.vtype||"")+(v.insurance_expires?', insurance '+esc(v.insurance_expires):'')+'</small> '+(exp?'<span class="pill out">Insurance expired</span>':'')+(v.active?'':'<span class="pill out">Band</span>')+'</div><button class="btn ghost sm" data-a="vst" data-id="'+v.id+'">'+(v.active?'Band karo':'Chalu karo')+'</button></div>'}).join("")+
-   '<button class="btn ghost sm" data-a="vadd" data-id="'+p.id+'" style="margin-top:8px">+ Gaadi jodo</button></div>'}).join("")+
- '<div class="card flex" style="margin-top:12px"><div><b>Default fee</b><br><small>Map pin wale orders (jinka zone nahi) ke liye: '+fmt(S.cfg.dfee)+'</small></div><button class="btn sm" data-a="dfee">Badlo</button></div><h1 style="font-size:16px">Rate card (partner ko milne wala fee)</h1><small>Har zone ke liye ek order ka fee. Order assign karte waqt yahi fee lagta hai.</small><div style="margin-top:8px"></div>'+
- S.zones.filter(function(z){return z.active}).map(function(z){var r=rate(z.id);return '<div class="card flex"><div><b>'+esc(z.name)+'</b><br><small>'+(r==null?'Fee set nahi':fmt(r))+'</small></div><button class="btn sm" data-a="rate" data-id="'+z.id+'">'+(r==null?'Set':'Badlo')+'</button></div>'}).join("")}
+   vs.map(function(v){var exp=v.insurance_expires&&v.insurance_expires<today;return '<div class="flex" style="margin-top:8px"><div><b>'+esc(v.reg_no)+'</b> <small>'+esc(v.vtype||"")+(v.insurance_expires?', insurance '+esc(v.insurance_expires):'')+'</small> '+(exp?'<span class="pill out">Insurance expired</span>':'')+(v.active?'':'<span class="pill out">Off</span>')+'</div><button class="btn ghost sm" data-a="vst" data-id="'+v.id+'">'+(v.active?'Turn off':'Turn on')+'</button></div>'}).join("")+
+   '<button class="btn ghost sm" data-a="vadd" data-id="'+p.id+'" style="margin-top:8px">+ Add vehicle</button></div>'}).join("")+
+ '<div class="card flex" style="margin-top:12px"><div><b>Default fee</b><br><small>For map-pin orders (no zone): '+fmt(S.cfg.dfee)+'</small></div><button class="btn sm" data-a="dfee">Change</button></div><h1 style="font-size:16px">Rate card (fee paid to the partner)</h1><small>Fee per order for each zone. This fee is applied when an order is assigned.</small><div style="margin-top:8px"></div>'+
+ S.zones.filter(function(z){return z.active}).map(function(z){var r=rate(z.id);return '<div class="card flex"><div><b>'+esc(z.name)+'</b><br><small>'+(r==null?'Fee not set':fmt(r))+'</small></div><button class="btn sm" data-a="rate" data-id="'+z.id+'">'+(r==null?'Set':'Change')+'</button></div>'}).join("")}
 function viewHtml(){var v=S.view;
- if((v==="staff"||v==="settings"||v==="partners")&&S.role!=="admin")v="more";
- return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():v==="partners"?partnersV():catV()}
-function navOn(t){var v=S.view;return v===t||(t==="stock"&&(v==="bulk"||v==="bill"))||(t==="more"&&(v==="staff"||v==="settings"||v==="audit"||v==="partners"))}
+ if((v==="staff"||v==="settings"||v==="partners"||v==="credit")&&S.role!=="admin")v="more";
+ return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():v==="partners"?partnersV():v==="credit"?creditV():catV()}
+function navOn(t){var v=S.view;return v===t||(t==="stock"&&(v==="bulk"||v==="bill"))||(t==="more"&&(v==="staff"||v==="settings"||v==="audit"||v==="partners"||v==="credit"))}
 function stk(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<1?["out","Out"]:a<=S.cfg.low?["low","Low"]:["ok","OK"]}
 function stockV(){
  var s=S.q.toLowerCase(),vs=S.inv.filter(function(v){return (v.products.brand+" "+v.products.name+" "+v.label).toLowerCase().indexOf(s)>-1});
@@ -286,7 +300,7 @@ function render(){
 document.addEventListener("click",async function(e){
  var b=e.target.closest("[data-a]");if(!b||b.disabled)return;
  var a=b.dataset.a,id=b.dataset.id,y=window.scrollY;S.err="";
- if(a==="go"){S.view=id;S.q="";S.loadErr="";if(id==="staff")await loadStaff();else if(id==="audit")await loadAudit();else if(id==="settings")await loadCfg();else if(id==="partners")await loadPartners()}
+ if(a==="go"){S.view=id;S.q="";S.loadErr="";if(id==="staff")await loadStaff();else if(id==="audit")await loadAudit();else if(id==="settings")await loadCfg();else if(id==="partners")await loadPartners();else if(id==="credit")await loadCredit()}
  else if(a==="f")S.f=id;
  else if(a==="tog")S.open[id]=!S.open[id];
  else if(a==="back"){S.step="phone";S.otp=""}
@@ -299,7 +313,7 @@ document.addEventListener("click",async function(e){
   if(r2.error)S.err=r2.error.message;else{S.step="phone";S.otp="";S.boot=true;render();return whoami()}}
  else if(a==="st"){
   var s=b.dataset.s;
-  var rs0=null;if(s==="cancelled"){if(!confirm("Cancel this order? Reserved stock will be released."))return;rs0=why("Order cancel kar rahe ho",true);if(rs0===null)return}
+  var rs0=null;if(s==="cancelled"){if(!confirm("Cancel this order? Reserved stock will be released."))return;rs0=why("Cancelling order",true);if(rs0===null)return}
   b.disabled=true;var r3=await sb.rpc("set_order_status",{p_order:+id,p_status:s});
   if(r3.error){alert(r3.error.message)}else{toast("Order updated");if(rs0)await audit("order_note","orders",id,{reason:rs0})}
   await loadAll()}
@@ -312,7 +326,7 @@ document.addEventListener("click",async function(e){
  else if(a==="price"){
   var v2=S.inv.find(function(x){return x.id==id}),p=prompt("New price for "+v2.products.name+" ("+v2.label+"), before GST",v2.price);
   p=parseFloat(p);
-  if(p>=0){var rp=why("Price badal rahe ho",true);if(rp===null)return;var r5=await sb.from("variants").update({price:p}).eq("id",id);
+  if(p>=0){var rp=why("Changing price",true);if(rp===null)return;var r5=await sb.from("variants").update({price:p}).eq("id",id);
    if(r5.error)alert(r5.error.message);else{await audit("price_change","variants",id,{from:v2.price,to:p,reason:rp});toast("Price updated");await loadInv()}}}
  else if(a==="bmode")S.bulk.mode=id;
  else if(a==="bcat")S.bulk.cat=id;
@@ -325,16 +339,16 @@ document.addEventListener("click",async function(e){
    if(t<res||t<0){bad.push(vv.products.name+" "+vv.label);return}
    var row={variant_id:+k,total:t};if(B.mode==="add")row.last_received=today2;
    rows.push(row);det.push({v:+k,from:cur,to:t})});
-  if(bad.length){alert("Reserved stock se kam nahi ho sakta: "+bad.join(", "));render();return}
-  if(!rows.length||!confirm(rows.length+" items ka stock update karna hai?"))return;var rbk=why("Bulk stock update",B.mode==="set");if(rbk===null)return;
+  if(bad.length){alert("Cannot be below reserved stock: "+bad.join(", "));render();return}
+  if(!rows.length||!confirm(rows.length+" items — update stock?"))return;var rbk=why("Bulk stock update",B.mode==="set");if(rbk===null)return;
   var rb=await sb.from("inventory").upsert(rows);
   if(rb.error)alert(rb.error.message);else{await audit("bulk_stock","inventory","bulk",{mode:B.mode,items:det,reason:rbk});S.bulk.vals={};toast("Stock updated");await loadInv()}}
  else if(a==="bsave"){
   var agg={};
   S.bill.rows.forEach(function(r){var q=parseInt(r.q,10);if(r.v&&q>0)agg[r.v]=(agg[r.v]||0)+q});
   var ks=Object.keys(agg);
-  if(!ks.length){alert("Koi item/quantity nahi hai.");return}
-  if(!confirm(ks.length+" items ka stock badhana hai?"))return;var rbl=why("Bill se stock",false);if(rbl===null)return;
+  if(!ks.length){alert("There are no items or quantities.");return}
+  if(!confirm(ks.length+" items — add to stock?"))return;var rbl=why("Bill se stock",false);if(rbl===null)return;
   var rows2=[],det2=[];
   ks.forEach(function(k){var vv=S.inv.find(function(z){return z.id==k}),cur=vv.inv?vv.inv.total:0;rows2.push({variant_id:+k,total:cur+agg[k],last_received:new Date().toISOString().slice(0,10)});det2.push({v:+k,qty:agg[k]})});
   var rs=await sb.from("inventory").upsert(rows2);
@@ -342,122 +356,148 @@ document.addEventListener("click",async function(e){
  else if(a==="gst"){
   var v4=S.inv.find(function(x){return x.id==id}),g=prompt("GST % for "+v4.products.brand+" "+v4.products.name+" (sab sizes par lagega). 0, 5, 12, 18 ya 28",v4.products.gst_percent);
   if(g!==null){g=parseFloat(g);
-   if([0,5,12,18,28].indexOf(g)<0)alert("Sirf 0, 5, 12, 18 ya 28 daalo");
-   else{var rgw=why("GST badal rahe ho",true);if(rgw===null)return;var rg=await sb.from("products").update({gst_percent:g}).eq("id",v4.product_id);
-    if(rg.error)alert(rg.error.message);else{await audit("gst_change","products",v4.product_id,{from:v4.products.gst_percent,to:g,reason:rgw});toast("GST updated (naye orders par lagega)");await loadInv()}}}}
+   if([0,5,12,18,28].indexOf(g)<0)alert("Enter only 0, 5, 12, 18 or 28");
+   else{var rgw=why("Changing GST",true);if(rgw===null)return;var rg=await sb.from("products").update({gst_percent:g}).eq("id",v4.product_id);
+    if(rg.error)alert(rg.error.message);else{await audit("gst_change","products",v4.product_id,{from:v4.products.gst_percent,to:g,reason:rgw});toast("GST updated (applies to new orders)");await loadInv()}}}}
  else if(a==="sadd"){
-  var sf=S.sf;if(!/^[6-9][0-9]{9}$/.test(sf.phone)){alert("10-digit sahi number daalo");return}
+  var sf=S.sf;if(!/^[6-9][0-9]{9}$/.test(sf.phone)){alert("Enter a valid 10-digit number");return}
   var rsa=await sb.rpc("set_staff",{p_phone:sf.phone,p_role:sf.role,p_name:sf.name,p_reason:"added from panel"});
-  if(rsa.error)alert(rsa.error.message);else{toast(rsa.data==="invited"?"Add ho gaya. Number se login karte hi staff banega":"Role update ho gaya");S.sf={name:"",phone:"",role:"staff"};await loadStaff()}}
+  if(rsa.error)alert(rsa.error.message);else{toast(rsa.data==="invited"?"Added. They become staff as soon as they log in with this number":"Role updated");S.sf={name:"",phone:"",role:"staff"};await loadStaff()}}
  else if(a==="srole"){
-  var sp=S.staff.find(function(x){return x.id===id}),nr=prompt("Naya role likho: staff, admin, ya customer (access hatane ke liye)",sp.role);
+  var sp=S.staff.find(function(x){return x.id===id}),nr=prompt("Enter the new role: staff, admin or customer (customer removes access)",sp.role);
   if(nr!==null){nr=nr.trim().toLowerCase();
-   if(["staff","admin","customer"].indexOf(nr)<0)alert("Sirf staff, admin ya customer likho");
-   else{var rsr=why("Role badal rahe ho",true);if(rsr===null)return;
+   if(["staff","admin","customer"].indexOf(nr)<0)alert("Enter only staff, admin or customer");
+   else{var rsr=why("Changing role",true);if(rsr===null)return;
     var rr2=await sb.rpc("set_staff",{p_phone:sp.phone,p_role:nr,p_name:"",p_reason:rsr});
     if(rr2.error)alert(rr2.error.message);else{toast("Role updated");await loadStaff()}}}}
  else if(a==="sname"){
-  var sp2=S.staff.find(function(x){return x.id===id}),nn=prompt("Naam",sp2.full_name||"");
-  if(nn!==null&&nn.trim()){var rr3=await sb.rpc("set_staff",{p_phone:sp2.phone,p_role:sp2.role,p_name:nn.trim(),p_reason:"naam update"});
-   if(rr3.error)alert(rr3.error.message);else{toast("Naam save");await loadStaff()}}}
+  var sp2=S.staff.find(function(x){return x.id===id}),nn=prompt("Name",sp2.full_name||"");
+  if(nn!==null&&nn.trim()){var rr3=await sb.rpc("set_staff",{p_phone:sp2.phone,p_role:sp2.role,p_name:nn.trim(),p_reason:"name update"});
+   if(rr3.error)alert(rr3.error.message);else{toast("Name saved");await loadStaff()}}}
  else if(a==="sinv"){
-  if(!confirm("Is pending invite ko hatana hai?"))return;
+  if(!confirm("Remove this pending invite?"))return;
   var rd=await sb.from("staff_invites").delete().eq("phone",id);
   if(rd.error)alert(rd.error.message);else{await audit("staff_invited","profiles",id,{phone:id,to:"removed",reason:"invite removed"});await loadStaff()}}
  else if(a==="sforce"){
-  var nf=!S.cfg.force,rf=why(nf?"Store band kar rahe ho":"Store khol rahe ho",true);if(rf===null)return;
+  var nf=!S.cfg.force,rf=why(nf?"Closing the store":"Opening the store",true);if(rf===null)return;
   var rsf=await sb.from("settings").upsert({key:"force_closed",value:nf});
-  if(rsf.error)alert(rsf.error.message);else{await audit("store_setting","settings","force_closed",{force_closed:nf,reason:rf});toast(nf?"Store band":"Store chalu");await loadCfg()}}
+  if(rsf.error)alert(rsf.error.message);else{await audit("store_setting","settings","force_closed",{force_closed:nf,reason:rf});toast(nf?"Store closed":"Store open");await loadCfg()}}
  else if(a==="shsave"){
-  var rh=why("Store timing badal rahe ho",true);if(rh===null)return;
+  var rh=why("Changing store timing",true);if(rh===null)return;
   var hrows=S.cfg.hours.map(function(h){return {day:h.day,is_open:h.is_open,opens:String(h.opens).slice(0,5),closes:String(h.closes).slice(0,5)}});
   var rsh=await sb.from("store_hours").upsert(hrows);
   if(rsh.error)alert(rsh.error.message);else{await audit("store_hours","store_hours","all",{hours:hrows,reason:rh});toast("Timing save");await loadCfg()}}
+ else if(a==="cset"){
+  var cs=S.cf;if(!/^[6-9][0-9]{9}$/.test(cs.phone)||!(Number(cs.sd)>=0)||cs.sd===""){alert("Enter a 10-digit number and the SD");return}
+  var cw=why("Credit on: +91"+cs.phone+", SD "+cs.sd,true);if(cw===null)return;
+  var cr=await sb.rpc("set_credit",{p_phone:"91"+cs.phone,p_enabled:true,p_sd:Number(cs.sd),p_reason:cw});
+  if(cr.error)alert(cr.error.message);else{S.cf={phone:"",sd:""};toast("Credit on");await loadCredit()}}
+ else if(a==="csd"||a==="ctog"){
+  var sd0=Number(b.dataset.sd),en0=b.dataset.en==="1",sd1=sd0,en1=en0;
+  if(a==="csd"){var ns=prompt("New security deposit (₹)",sd0);if(ns===null)return;sd1=Number(ns);if(!(sd1>=0)){alert("Invalid SD");return}}else en1=!en0;
+  var cw2=why(a==="csd"?"Changing SD":(en1?"Credit on":"Credit off"),true);if(cw2===null)return;
+  var cr2=await sb.rpc("set_credit",{p_phone:id,p_enabled:en1,p_sd:sd1,p_reason:cw2});
+  if(cr2.error)alert(cr2.error.message);else{toast("Saved");await loadCredit()}}
+ else if(a==="cpay"){
+  var am=prompt("How much did the customer pay? (₹)");if(am===null)return;am=Number(am);if(!(am>0)){alert("Invalid amount");return}
+  var nt=prompt("Note (cash / UPI / cheque), can be left empty","cash");if(nt===null)return;
+  var cr3=await sb.rpc("record_credit_payment",{p_phone:id,p_amount:am,p_note:nt});
+  if(cr3.error)alert(cr3.error.message);else{toast("Payment recorded");await loadCredit()}}
+ else if(a==="srz"){
+  var rk=document.getElementById("rzk").value.trim();if(rk&&!/^rzp_(test|live)_/.test(rk)){alert("The Key Id starts with 'rzp_test_' or 'rzp_live_'");return}
+  var rkw=why("Razorpay Key Id",false);if(rkw===null)return;
+  var rkr=await sb.from("settings").upsert({key:"rzp_key_id",value:rk});
+  if(rkr.error)alert(rkr.error.message);else{await audit("store_setting","settings","rzp_key_id",{rzp_key_id:rk?"set":"removed",reason:rkw});S.cfg.rzk=rk;toast("Saved")}}
+ else if(a==="sonl"){
+  var no=!S.cfg.onl;if(no&&!S.cfg.rzk){alert("Save the Key Id first");return}
+  var rnw=why(no?"Turning online payment on":"Turning online payment off",true);if(rnw===null)return;
+  var rnr=await sb.from("settings").upsert({key:"online_pay",value:no});
+  if(rnr.error)alert(rnr.error.message);else{await audit("store_setting","settings","online_pay",{online_pay:no,reason:rnw});toast(no?"Online on":"Online off");await loadCfg()}}
  else if(a==="sgm"){
   var gk=document.getElementById("gmk").value.trim();var gw=why("Maps key",false);if(gw===null)return;
   var gr=await sb.from("settings").upsert({key:"gmaps_key",value:gk});
-  if(gr.error)alert(gr.error.message);else{await audit("store_setting","settings","gmaps_key",{gmaps_key:gk?"set":"removed",reason:gw});S.cfg.gkey=gk;toast("Save ho gaya")}}
+  if(gr.error)alert(gr.error.message);else{await audit("store_setting","settings","gmaps_key",{gmaps_key:gk?"set":"removed",reason:gw});S.cfg.gkey=gk;toast("Saved")}}
  else if(a==="gmy"){
-  if(!navigator.geolocation){alert("Is phone mein location nahi mil sakti");return}
-  navigator.geolocation.getCurrentPosition(function(p){document.getElementById("glat").value=p.coords.latitude.toFixed(6);document.getElementById("glng").value=p.coords.longitude.toFixed(6);toast("Location mil gayi. Ab Save dabao")},function(){alert("Location nahi mili. Permission do")},{enableHighAccuracy:true,timeout:15000});return}
+  if(!navigator.geolocation){alert("Location is not available on this phone");return}
+  navigator.geolocation.getCurrentPosition(function(p){document.getElementById("glat").value=p.coords.latitude.toFixed(6);document.getElementById("glng").value=p.coords.longitude.toFixed(6);toast("Location found. Now tap Save")},function(){alert("Could not get location. Allow permission")},{enableHighAccuracy:true,timeout:15000});return}
  else if(a==="sgd"){
   var la=parseFloat(document.getElementById("glat").value),lo=parseFloat(document.getElementById("glng").value);
-  if(!(la>=-90&&la<=90&&lo>=-180&&lo<=180)){alert("Sahi latitude aur longitude daalo");return}
-  var gdw=why("Godown ki location badal rahe ho",true);if(gdw===null)return;
+  if(!(la>=-90&&la<=90&&lo>=-180&&lo<=180)){alert("Enter a valid latitude and longitude");return}
+  var gdw=why("Changing godown location",true);if(gdw===null)return;
   var gdr=await sb.from("settings").upsert({key:"godown",value:{lat:la,lng:lo}});
   if(gdr.error)alert(gdr.error.message);else{await audit("store_setting","settings","godown",{lat:la,lng:lo,reason:gdw});S.cfg.godown={lat:la,lng:lo};toast("Godown ki location save")}}
  else if(a==="srad"){
-  var rv=parseFloat(document.getElementById("radv").value);if(!(rv>=0)){alert("Number daalo");return}
-  var rw2=why("Max delivery doori badal rahe ho",true);if(rw2===null)return;
+  var rv=parseFloat(document.getElementById("radv").value);if(!(rv>=0)){alert("Enter a number");return}
+  var rw2=why("Changing max delivery distance",true);if(rw2===null)return;
   var rr7=await sb.from("settings").upsert({key:"max_radius_km",value:rv});
-  if(rr7.error)alert(rr7.error.message);else{await audit("store_setting","settings","max_radius_km",{km:rv,reason:rw2});S.cfg.rad=rv;toast("Save ho gaya")}}
+  if(rr7.error)alert(rr7.error.message);else{await audit("store_setting","settings","max_radius_km",{km:rv,reason:rw2});S.cfg.rad=rv;toast("Saved")}}
  else if(a==="dfee"){
-  var df=prompt("Default partner fee (₹), jab order ka koi zone nahi (map pin wale orders)",S.cfg.dfee);df=parseFloat(df);
-  if(df>=0){var dw=why("Default fee badal rahe ho",true);if(dw===null)return;
+  var df=prompt("Default partner fee (₹) when the order has no zone (map-pin orders)",S.cfg.dfee);df=parseFloat(df);
+  if(df>=0){var dw=why("Changing default fee",true);if(dw===null)return;
    var dr=await sb.from("settings").upsert({key:"default_partner_fee",value:df});
-   if(dr.error)alert(dr.error.message);else{await audit("store_setting","settings","default_partner_fee",{fee:df,reason:dw});S.cfg.dfee=df;toast("Save ho gaya")}}}
+   if(dr.error)alert(dr.error.message);else{await audit("store_setting","settings","default_partner_fee",{fee:df,reason:dw});S.cfg.dfee=df;toast("Saved")}}}
  else if(a==="scity"){
-  var cv=document.getElementById("cityv").value.trim();if(!cv){alert("Shehar ka naam likho");return}
-  var cw=why("Shehar badal rahe ho",true);if(cw===null)return;
+  var cv=document.getElementById("cityv").value.trim();if(!cv){alert("Enter the city name");return}
+  var cw=why("Changing city",true);if(cw===null)return;
   var cr=await sb.from("settings").upsert({key:"city",value:cv});
-  if(cr.error)alert(cr.error.message);else{await audit("store_setting","settings","city",{city:cv,reason:cw});S.cfg.city=cv;toast("Save ho gaya")}}
+  if(cr.error)alert(cr.error.message);else{await audit("store_setting","settings","city",{city:cv,reason:cw});S.cfg.city=cv;toast("Saved")}}
  else if(a==="zadd"){
-  var zn=S.zonef.trim();if(!zn){alert("Area ka naam likho");return}
+  var zn=S.zonef.trim();if(!zn){alert("Enter the area name");return}
   var zr=await sb.from("zones").insert({name:zn}).select("id").single();
-  if(zr.error)alert(zr.error.message.indexOf("zones_name_key")>-1?"Yeh area pehle se hai":zr.error.message);
-  else{await audit("zone_change","zones",zr.data.id,{name:zn,what:"added",reason:"added from panel"});S.zonef="";toast("Area jud gaya. Rate card mein uska fee set karo");await loadPartners()}}
+  if(zr.error)alert(zr.error.message.indexOf("zones_name_key")>-1?"This area already exists":zr.error.message);
+  else{await audit("zone_change","zones",zr.data.id,{name:zn,what:"added",reason:"added from panel"});S.zonef="";toast("Area added. Set its fee in the rate card");await loadPartners()}}
  else if(a==="zren"){
-  var zo=S.zones.find(function(x){return x.id==id}),zm=prompt("Naya naam",zo.name);
-  if(zm!==null&&zm.trim()&&zm.trim()!==zo.name){var zq=why("Area ka naam badal rahe ho",true);if(zq===null)return;
+  var zo=S.zones.find(function(x){return x.id==id}),zm=prompt("New name",zo.name);
+  if(zm!==null&&zm.trim()&&zm.trim()!==zo.name){var zq=why("Renaming area",true);if(zq===null)return;
    var zs=await sb.from("zones").update({name:zm.trim()}).eq("id",id);
-   if(zs.error)alert(zs.error.message);else{await audit("zone_change","zones",id,{name:zm.trim(),what:"renamed from "+zo.name,reason:zq});toast("Naam badal gaya");await loadPartners()}}}
+   if(zs.error)alert(zs.error.message);else{await audit("zone_change","zones",id,{name:zm.trim(),what:"renamed from "+zo.name,reason:zq});toast("Name changed");await loadPartners()}}}
  else if(a==="zvis"){
-  var zv=S.zones.find(function(x){return x.id==id}),zw=why((zv.active?"Area hide kar rahe ho: ":"Area dikha rahe ho: ")+zv.name,true);if(zw===null)return;
+  var zv=S.zones.find(function(x){return x.id==id}),zw=why((zv.active?"Hiding area: ":"Showing area: ")+zv.name,true);if(zw===null)return;
   var zy=await sb.from("zones").update({active:!zv.active}).eq("id",id);
   if(zy.error)alert(zy.error.message);else{await audit("zone_change","zones",id,{name:zv.name,what:zv.active?"hidden":"shown",reason:zw});await loadPartners()}}
  else if(a==="slow"){
-  var lv=parseInt(document.getElementById("lowv").value,10);if(!(lv>=0)){alert("Number daalo");return}
-  var rl=why("Low stock limit badal rahe ho",true);if(rl===null)return;
+  var lv=parseInt(document.getElementById("lowv").value,10);if(!(lv>=0)){alert("Enter a number");return}
+  var rl=why("Changing low stock limit",true);if(rl===null)return;
   var rsl=await sb.from("settings").upsert({key:"low_stock_threshold",value:lv});
-  if(rsl.error)alert(rsl.error.message);else{await audit("low_stock","settings","low_stock_threshold",{to:lv,reason:rl});S.cfg.low=lv;toast("Save ho gaya")}}
+  if(rsl.error)alert(rsl.error.message);else{await audit("low_stock","settings","low_stock_threshold",{to:lv,reason:rl});S.cfg.low=lv;toast("Saved")}}
  else if(a==="asg"){
   var asP=S.partners.filter(function(x){return x.status==="approved"&&x.active});
-  if(!asP.length){alert("Koi approved partner nahi hai. More → Partners mein jodo aur approve karo.");return}
-  var asK=prompt("Partner chuno (number likho):\n"+asP.map(function(x,i){return (i+1)+". "+x.name}).join("\n"));
-  if(asK===null)return;var asX=asP[parseInt(asK,10)-1];if(!asX){alert("Sahi number likho");return}
+  if(!asP.length){alert("There is no approved partner. Add and approve one in More → Partners.");return}
+  var asK=prompt("Choose a partner (type the number):\n"+asP.map(function(x,i){return (i+1)+". "+x.name}).join("\n"));
+  if(asK===null)return;var asX=asP[parseInt(asK,10)-1];if(!asX){alert("Enter a valid number");return}
   var asV=S.vehicles.filter(function(x){return x.partner_id===asX.id&&x.active}),asVid=null;
-  if(asV.length){var asVk=prompt("Gaadi chuno (number likho, skip ke liye khali chhodo):\n"+asV.map(function(x,i){return (i+1)+". "+x.reg_no}).join("\n"));
-   if(asVk===null)return;if(asVk.trim()){var asVv=asV[parseInt(asVk,10)-1];if(!asVv){alert("Sahi number likho");return}asVid=asVv.id}}
+  if(asV.length){var asVk=prompt("Choose a vehicle (type its number, leave empty to skip):\n"+asV.map(function(x,i){return (i+1)+". "+x.reg_no}).join("\n"));
+   if(asVk===null)return;if(asVk.trim()){var asVv=asV[parseInt(asVk,10)-1];if(!asVv){alert("Enter a valid number");return}asVid=asVv.id}}
   var asR=await sb.rpc("assign_partner",{p_order:+id,p_partner:asX.id,p_vehicle:asVid,p_reason:"panel se assign"});
-  if(asR.error)alert(asR.error.message);else{toast("Partner assign ho gaya");await loadOrders()}}
+  if(asR.error)alert(asR.error.message);else{toast("Partner assigned");await loadOrders()}}
  else if(a==="padd"){
-  var pf=S.pf;if(!pf.name.trim()||!/^[6-9][0-9]{9}$/.test(pf.phone)){alert("Naam aur 10-digit sahi number daalo");return}
+  var pf=S.pf;if(!pf.name.trim()||!/^[6-9][0-9]{9}$/.test(pf.phone)){alert("Enter a name and a valid 10-digit number");return}
   var pr1=await sb.from("partners").insert({name:pf.name.trim(),phone:"91"+pf.phone,status:"pending"}).select("id").single();
-  if(pr1.error)alert(pr1.error.message.indexOf("partners_phone_uq")>-1?"Yeh number pehle se jura hai":pr1.error.message);
-  else{await audit("partner_added","partners",pr1.data.id,{name:pf.name.trim(),reason:"added from panel"});S.pf={name:"",phone:""};toast("Partner jud gaya. Ab Approve karo");await loadPartners()}}
+  if(pr1.error)alert(pr1.error.message.indexOf("partners_phone_uq")>-1?"This number is already added":pr1.error.message);
+  else{await audit("partner_added","partners",pr1.data.id,{name:pf.name.trim(),reason:"added from panel"});S.pf={name:"",phone:""};toast("Partner added. Now tap Approve");await loadPartners()}}
  else if(a==="pst"){
-  var ps=b.dataset.s,pp1=S.partners.find(function(x){return x.id==id}),pr2=why((ps==="approved"?"Approve":"Suspend")+" kar rahe ho: "+pp1.name,true);if(pr2===null)return;
+  var ps=b.dataset.s,pp1=S.partners.find(function(x){return x.id==id}),pr2=why((ps==="approved"?"Approve":"Suspend")+" : "+pp1.name,true);if(pr2===null)return;
   var pr3=await sb.from("partners").update({status:ps}).eq("id",id);
   if(pr3.error)alert(pr3.error.message);else{await audit("partner_status","partners",id,{name:pp1.name,to:ps,reason:pr2});toast("Updated");await loadPartners()}}
  else if(a==="vadd"){
-  var vp=S.partners.find(function(x){return x.id==id}),vr=prompt("Gaadi ka number (jaise MH31AB1234)");if(!vr||!vr.trim())return;
-  var vt=prompt("Gaadi ka type (jaise Tempo, Truck, Pickup)","Tempo");if(vt===null)return;
-  var vi=prompt("Insurance khatam hone ki date (YYYY-MM-DD), pata na ho to khali chhodo","");if(vi===null)return;
-  if(vi.trim()&&!/^\d{4}-\d{2}-\d{2}$/.test(vi.trim())){alert("Date aise likho: 2027-03-31");return}
+  var vp=S.partners.find(function(x){return x.id==id}),vr=prompt("Vehicle number (e.g. MH31AB1234)");if(!vr||!vr.trim())return;
+  var vt=prompt("Vehicle type (e.g. Tempo, Truck, Pickup)","Tempo");if(vt===null)return;
+  var vi=prompt("Insurance expiry date (YYYY-MM-DD), leave empty if unknown","");if(vi===null)return;
+  if(vi.trim()&&!/^\d{4}-\d{2}-\d{2}$/.test(vi.trim())){alert("Write the date like this: 2027-03-31");return}
   var vo=await sb.from("vehicles").insert({partner_id:+id,reg_no:vr.trim().toUpperCase().replace(/\s+/g,""),vtype:vt.trim(),insurance_expires:vi.trim()||null}).select("id").single();
-  if(vo.error)alert(vo.error.message);else{await audit("vehicle_added","vehicles",vo.data.id,{reg:vr.trim().toUpperCase(),partner:vp.name,reason:"added from panel"});toast("Gaadi jud gayi");await loadPartners()}}
+  if(vo.error)alert(vo.error.message);else{await audit("vehicle_added","vehicles",vo.data.id,{reg:vr.trim().toUpperCase(),partner:vp.name,reason:"added from panel"});toast("Vehicle added");await loadPartners()}}
  else if(a==="vst"){
-  var vx=S.vehicles.find(function(x){return x.id==id}),vw=why((vx.active?"Gaadi band kar rahe ho ":"Gaadi chalu kar rahe ho ")+vx.reg_no,true);if(vw===null)return;
+  var vx=S.vehicles.find(function(x){return x.id==id}),vw=why((vx.active?"Deactivating vehicle ":"Activating vehicle ")+vx.reg_no,true);if(vw===null)return;
   var vy=await sb.from("vehicles").update({active:!vx.active}).eq("id",id);
   if(vy.error)alert(vy.error.message);else{await audit("vehicle_status","vehicles",id,{reg:vx.reg_no,active:!vx.active,reason:vw});await loadPartners()}}
  else if(a==="rate"){
-  var rz=S.zones.find(function(x){return x.id==id}),ro=S.rates.find(function(x){return x.zone_id==id}),rf=prompt("Fee kitni (₹) "+rz.name+" ke ek order ke liye?",ro?ro.fee:"");
+  var rz=S.zones.find(function(x){return x.id==id}),ro=S.rates.find(function(x){return x.zone_id==id}),rf=prompt("Fee kitni (₹) "+rz.name+"  for one order?",ro?ro.fee:"");
   rf=parseFloat(rf);
-  if(rf>=0){var rw=why("Rate card badal rahe ho",true);if(rw===null)return;
+  if(rf>=0){var rw=why("Changing rate card",true);if(rw===null)return;
    var rr9=await sb.from("rate_card").upsert({zone_id:+id,fee:rf});
    if(rr9.error)alert(rr9.error.message);else{await audit("rate_card","rate_card",id,{zone:rz.name,from:ro?Number(ro.fee):null,to:rf,reason:rw});toast("Fee save");await loadPartners()}}}
  else if(a==="vis"){
-  var v3=S.inv.find(function(x){return x.id==id});var rv=why(v3.active?"Hide kar rahe ho":"Show kar rahe ho",true);if(rv===null)return;
+  var v3=S.inv.find(function(x){return x.id==id});var rv=why(v3.active?"Hiding":"Showing",true);if(rv===null)return;
   var r6=await sb.from("variants").update({active:!v3.active}).eq("id",id);
   if(r6.error)alert(r6.error.message);else{await audit("visibility","variants",id,{active:!v3.active,reason:rv});await loadInv()}}
  render();window.scrollTo(0,y)});
@@ -469,6 +509,7 @@ document.addEventListener("input",function(e){
  else if(e.target.dataset.bulk){S.bulk.vals[e.target.dataset.bulk]=e.target.value}
  else if(e.target.dataset.bi!=null&&e.target.dataset.f==="q"){S.bill.rows[+e.target.dataset.bi].q=e.target.value}
  else if(e.target.dataset.zf){S.zonef=e.target.value}
+ else if(e.target.dataset.cf){var cv=e.target.value;if(e.target.dataset.cf==="phone")cv=cv.replace(/\D/g,"");S.cf[e.target.dataset.cf]=cv}
  else if(e.target.dataset.pf){var pv=e.target.value;if(e.target.dataset.pf==="phone")pv=pv.replace(/\D/g,"");S.pf[e.target.dataset.pf]=pv}
  else if(e.target.dataset.sf){var sv=e.target.value;if(e.target.dataset.sf==="phone")sv=sv.replace(/\D/g,"");S.sf[e.target.dataset.sf]=sv}
  else if(e.target.dataset.af==="q"){S.af.q=e.target.value;var ps=e.target.selectionStart;render();var ea=document.getElementById("aq");if(ea){ea.focus();ea.setSelectionRange(ps,ps)}}});
