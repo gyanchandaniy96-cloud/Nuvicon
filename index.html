@@ -39,7 +39,7 @@ nav button.on{color:var(--ink);box-shadow:inset 0 3px 0 var(--acc)}
 var U="https://lievssgahoruyviciylz.supabase.co",K="sb_publishable_6OoFSHYl0fFS7gqNTs5jwA_DZs5K4Jn";
 var sb=window.supabase.createClient(U,K);
 var FLOW=["placed","staged","picked_up","in_transit","delivered"],LBL={placed:"Placed",staged:"Staged",picked_up:"Picked up",in_transit:"In transit",delivered:"Delivered",cancelled:"Cancelled"};
-var S={user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:""};
+var S={user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
 function esc(t){return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}
 function fmt(n){return "₹"+Math.round(Number(n)).toLocaleString("en-IN")}
 function toast(m){var t=document.getElementById("toast");t.innerHTML='<div class="toast">'+esc(m)+'</div>';setTimeout(function(){t.innerHTML=""},2500)}
@@ -78,17 +78,91 @@ function orderCard(o){
  (op?'<div class="items">'+o.order_items.map(function(l){return esc(l.qty)+' × '+esc(l.product_name)+' ('+esc(l.variant_label)+') '+fmt(l.unit_price*l.qty)}).join("<br>")+'<br><small>Subtotal '+fmt(o.subtotal)+' + GST '+fmt(o.gst_total)+'</small></div>'+
  '<div><small>Phone: <a href="tel:+'+esc(c.phone)+'">'+esc(c.phone)+'</a><br>Address: '+esc(o.address||"-")+'<br>Payment: '+esc(o.pay_method==="on_delivery"?"On delivery":"Online")+', '+esc(o.pay_status)+'</small></div>':'')+
  (nx||(o.status!=="delivered"&&o.status!=="cancelled")?'<div class="flex" style="margin-top:10px">'+(nx?'<button class="btn" data-a="st" data-id="'+o.id+'" data-s="'+nx+'">Mark '+LBL[nx]+'</button>':'<span></span>')+(o.status!=="delivered"&&o.status!=="cancelled"?'<button class="btn bad sm" data-a="st" data-id="'+o.id+'" data-s="cancelled">Cancel</button>':'')+'</div>':'')+'</div>'}
+
+function loadScript(u){return new Promise(function(res,rej){var t=document.createElement("script");t.src=u;t.onload=res;t.onerror=function(){rej(new Error("Load nahi hua: "+u))};document.head.appendChild(t)})}
+function cats(){var c=[];S.inv.forEach(function(v){if(c.indexOf(v.products.category)<0)c.push(v.products.category)});return c}
+function bulkV(){
+ var B=S.bulk,vs=S.inv.filter(function(v){return B.cat==="all"||v.products.category===B.cat});
+ var n=Object.keys(B.vals).filter(function(k){return B.vals[k]!==""&&!isNaN(+B.vals[k])}).length;
+ return '<h1>Bulk stock</h1><button class="btn ghost sm" data-a="go" data-id="stock">&larr; Inventory</button>'+
+ '<div class="chips"><button class="chip'+(B.mode==="add"?' on':'')+'" data-a="bmode" data-id="add">Add received</button><button class="chip'+(B.mode==="set"?' on':'')+'" data-a="bmode" data-id="set">Set exact count</button></div>'+
+ '<small>'+(B.mode==="add"?'Jo quantity aayi wo likho, current stock mein judegi.':'Godown ki asli ginti likho, stock wahi ho jayega.')+'</small>'+
+ '<div class="chips"><button class="chip'+(B.cat==="all"?' on':'')+'" data-a="bcat" data-id="all">All</button>'+cats().map(function(c){return '<button class="chip'+(B.cat===c?' on':'')+'" data-a="bcat" data-id="'+esc(c)+'">'+esc(c)+'</button>'}).join("")+'</div>'+
+ vs.map(function(v){var i=v.inv||{total:0,reserved:0};
+  return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', abhi '+i.total+' (reserved '+i.reserved+')</small></div><input type="number" inputmode="numeric" min="0" data-bulk="'+v.id+'" value="'+esc(B.vals[v.id]==null?"":B.vals[v.id])+'" placeholder="0" style="width:90px;margin:0"></div>'}).join("")+
+ '<div style="position:sticky;bottom:72px;padding-top:6px"><button class="btn" style="width:100%" data-a="bapply"'+(n?'':' disabled')+'>Update '+n+' items</button></div>'}
+function normT(s){return String(s).toLowerCase().replace(/(\d)\s*(kg|mm|ml|ltr|litre|liter|l|m)(?![a-z])/g,function(m,n,u){return n+(/^(ltr|litre|liter)$/.test(u)?"l":u)}).replace(/(\d)\s*x\s*(?=\d)/g,"$1x")}
+function reEsc(t){return t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
+function hasTok(l,t){return new RegExp("(^|[^a-z0-9.])"+reEsc(t)+"($|[^a-z0-9])").test(l)}
+function vKeys(v){
+ var pt=(v.products.brand+" "+v.products.name).toLowerCase().replace(/[^a-z0-9 ]/g," ").split(/\s+/).filter(function(w){return w&&["bar","premium","plus"].indexOf(w)<0});
+ var sz=normT(v.label.replace(/,/g," ")).split(/[^a-z0-9.x]+/).filter(function(w){return /\d/.test(w)});
+ return {pt:pt,sz:sz}}
+function parseLines(lines,inv){
+ var out=[];
+ lines.forEach(function(raw){
+  var l=normT(raw.replace(/\s+/g," ").trim());if(l.length<4)return;
+  var best=null,bs=0;
+  inv.forEach(function(v){
+   var k=vKeys(v),pm=k.pt.filter(function(w){return hasTok(l,w)}).length,sm=k.sz.filter(function(w){return hasTok(l,w)}).length;
+   if(!k.pt.length||pm/k.pt.length<0.5)return;
+   if(k.sz.length&&!sm)return;
+   var sc=pm+sm*2-(k.sz.length-sm)*0.5;
+   if(sc>bs){bs=sc;best=v}});
+  if(!best)return;
+  var k2=vKeys(best),rest=l.replace(/^\s*\d{1,2}[\s.)]+(?=[a-z])/,"");
+  k2.sz.forEach(function(w){if(hasTok(rest,w))rest=rest.replace(w," ")});
+  k2.pt.forEach(function(w){rest=rest.replace(new RegExp("\\b"+reEsc(w)+"\\b")," ")});
+  var nums=(rest.match(/\d[\d,]*(\.\d+)?/g)||[]).map(function(x){return x.replace(/,/g,"")}).filter(function(x){return !/^\d{4,8}$/.test(x)});
+  var q=nums.length?String(Math.round(parseFloat(nums[0]))):"";
+  out.push({v:String(best.id),q:q,raw:raw.replace(/\s+/g," ").trim()})});
+ return out}
+async function pdfLines(f){
+ if(!window.pdfjsLib)await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
+ pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+ var pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise,lines=[];
+ for(var p=1;p<=pdf.numPages;p++){
+  var tc=await (await pdf.getPage(p)).getTextContent();
+  var it=tc.items.filter(function(i){return i.str&&i.str.trim()}).map(function(i){return {y:i.transform[5],x:i.transform[4],s:i.str}}).sort(function(a,b){return b.y-a.y||a.x-b.x});
+  var cur=null;
+  it.forEach(function(i){if(cur&&Math.abs(cur.y-i.y)<=3){cur.p.push(i)}else{cur={y:i.y,p:[i]};lines.push(cur)}});
+  lines=lines.map(function(l){return l.p?l.p.sort(function(a,b){return a.x-b.x}).map(function(i){return i.s}).join(" "):l})}
+ return lines}
+async function processBill(f){
+ var b=S.bill;b.busy=true;b.err="";b.rows=[];b.done=false;b.name=f.name;b.msg="Bill padh raha hoon…";render();
+ try{
+  var lines;
+  if(f.type==="application/pdf"||/\.pdf$/i.test(f.name)){
+   lines=await pdfLines(f);
+   if(!lines.length){b.err="Is PDF mein text nahi mila (scanned lagta hai). Uska screenshot ya photo upload karo."}}
+  else{
+   b.msg="Photo se text nikal raha hoon (1-2 minute lag sakte hain)…";render();
+   if(!window.Tesseract)await loadScript("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js");
+   var r=await Tesseract.recognize(f,"eng");lines=r.data.text.split("\n")}
+  if(lines&&lines.length)b.rows=parseLines(lines,S.inv)
+ }catch(x){b.err="Error: "+x.message}
+ b.busy=false;b.done=true;render()}
+function billV(){
+ var b=S.bill;
+ return '<h1>Upload bill</h1><button class="btn ghost sm" data-a="go" data-id="stock">&larr; Inventory</button><p><small>Supplier ka bill (PDF ya photo) chuno. Pehle review dikhega, tabhi stock mein judega.</small></p>'+
+ '<input type="file" id="billfile" accept="application/pdf,image/*">'+
+ (b.busy?'<div class="empty">'+esc(b.msg)+'</div>':'')+(b.err?'<div class="err">'+esc(b.err)+'</div>':'')+
+ (b.done&&!b.busy?'<h1 style="font-size:16px">Review: '+b.rows.length+' items mile</h1><small>'+esc(b.name)+'. Har quantity bill se milao, galat ho to theek karo.</small>'+
+  (b.rows.length?'':'<div class="empty">Koi item match nahi hua. Neeche "+ Row" se haath se jodo.</div>')+
+  b.rows.map(function(r,i){return '<div class="card"><select data-bi="'+i+'" data-f="v"><option value="">— skip —</option>'+S.inv.map(function(v){return '<option value="'+v.id+'"'+(String(v.id)===String(r.v)?' selected':'')+'>'+esc(v.products.brand+" "+v.products.name+" - "+v.label)+'</option>'}).join("")+'</select>'+
+   '<div class="flex"><input type="number" inputmode="numeric" min="0" data-bi="'+i+'" data-f="q" value="'+esc(r.q)+'" placeholder="Qty" style="width:110px;margin:0"><button class="btn bad sm" data-a="brm" data-id="'+i+'">Hatao</button></div>'+(r.raw?'<small>Bill line: '+esc(r.raw)+'</small>':'')+'</div>'}).join("")+
+  '<div class="flex" style="margin-top:8px"><button class="btn ghost" data-a="baddrow">+ Row</button><button class="btn" data-a="bsave">Stock mein jodo</button></div>':'')}
 function stk(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<1?["out","Out"]:a<=20?["low","Low"]:["ok","OK"]}
 function stockV(){
  var s=S.q.toLowerCase(),vs=S.inv.filter(function(v){return (v.products.brand+" "+v.products.name+" "+v.label).toLowerCase().indexOf(s)>-1});
  var low=S.inv.filter(function(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<=20}).length;
- return '<h1>Inventory</h1><small>'+S.inv.length+' variants, '+low+' low or out</small><input id="q" placeholder="Search product or size" value="'+esc(S.q)+'" style="margin-top:8px">'+
+ return '<h1>Inventory</h1><small>'+S.inv.length+' variants, '+low+' low or out</small><div class="flex" style="margin:8px 0"><button class="btn sm" data-a="go" data-id="bulk">Bulk update</button><button class="btn sm" data-a="go" data-id="bill">Upload bill</button></div><input id="q" placeholder="Search product or size" value="'+esc(S.q)+'">'+
  (vs.length?vs.map(function(v){var t=stk(v),i=v.inv||{total:0,reserved:0};
   return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+'</small><br><span class="pill '+t[0]+'">'+t[1]+'</span> <small>Available <b>'+(i.total-i.reserved)+'</b>, total '+i.total+', reserved '+i.reserved+'</small></div><button class="btn sm" data-a="recv" data-id="'+v.id+'">+ Receive</button></div>'}).join(""):'<div class="empty">Nothing matches.</div>')}
 function catV(){
  var s=S.q.toLowerCase(),vs=S.inv.filter(function(v){return (v.products.brand+" "+v.products.name+" "+v.label).toLowerCase().indexOf(s)>-1});
  return '<h1>Catalog</h1><input id="q" placeholder="Search product or size" value="'+esc(S.q)+'">'+
- vs.map(function(v){return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', GST '+Number(v.products.gst_percent)+'%</small><br><b>'+fmt(v.price)+'</b> '+(v.active?'':'<span class="pill out">Hidden</span>')+'</div><div><button class="btn sm" data-a="price" data-id="'+v.id+'">Price</button> <button class="btn ghost sm" data-a="vis" data-id="'+v.id+'">'+(v.active?'Hide':'Show')+'</button></div></div>'}).join("")}
+ vs.map(function(v){return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', GST '+Number(v.products.gst_percent)+'%</small><br><b>'+fmt(v.price)+'</b> '+(v.active?'':'<span class="pill out">Hidden</span>')+'</div><div><button class="btn sm" data-a="price" data-id="'+v.id+'">Price</button> '+(S.role==="admin"?'<button class="btn sm" data-a="gst" data-id="'+v.id+'">GST</button> ':"")+'<button class="btn ghost sm" data-a="vis" data-id="'+v.id+'">'+(v.active?'Hide':'Show')+'</button></div></div>'}).join("")}
 function loginV(){
  return '<main><h1 style="margin-top:60px">Nuvicon Ops</h1><p class="mut">Staff login</p>'+
  (S.step==="phone"?'<input id="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" value="'+esc(S.phone)+'"><button class="btn" data-a="send"'+(S.busy?' disabled':'')+'>Send code</button>':
@@ -99,8 +173,8 @@ function render(){
  if(S.boot){a.innerHTML='<div class="empty">Loading…</div>';n.innerHTML="";return}
  if(!S.user){a.innerHTML=loginV();n.innerHTML="";return}
  if(S.role==="customer"||!S.role){a.innerHTML='<main><h1 style="margin-top:60px">No access</h1><p class="mut">This number is not a staff account. Ask an admin to give you the staff role.</p><button class="btn ghost" data-a="out">Log out</button></main>';n.innerHTML="";return}
- a.innerHTML='<div class="top"><div><b>NUVICON</b><small>OPS</small></div><div><small style="color:#aaa">'+esc(S.role)+'</small> <button data-a="out">Log out</button></div></div><main>'+(S.view==="orders"?ordersV():S.view==="stock"?stockV():catV())+'</main>';
- n.innerHTML=[["orders","Orders"],["stock","Inventory"],["catalog","Catalog"]].map(function(t){return '<button class="'+(S.view===t[0]?'on':'')+'" data-a="go" data-id="'+t[0]+'">'+t[1]+'</button>'}).join("")}
+ a.innerHTML='<div class="top"><div><b>NUVICON</b><small>OPS</small></div><div><small style="color:#aaa">'+esc(S.role)+'</small> <button data-a="out">Log out</button></div></div><main>'+(S.view==="orders"?ordersV():S.view==="stock"?stockV():S.view==="bulk"?bulkV():S.view==="bill"?billV():catV())+'</main>';
+ n.innerHTML=[["orders","Orders"],["stock","Inventory"],["catalog","Catalog"]].map(function(t){return '<button class="'+((S.view===t[0]||(t[0]==="stock"&&(S.view==="bulk"||S.view==="bill")))?'on':'')+'" data-a="go" data-id="'+t[0]+'">'+t[1]+'</button>'}).join("")}
 document.addEventListener("click",async function(e){
  var b=e.target.closest("[data-a]");if(!b||b.disabled)return;
  var a=b.dataset.a,id=b.dataset.id,y=window.scrollY;S.err="";
@@ -132,6 +206,37 @@ document.addEventListener("click",async function(e){
   p=parseFloat(p);
   if(p>=0){var r5=await sb.from("variants").update({price:p}).eq("id",id);
    if(r5.error)alert(r5.error.message);else{await audit("price_change","variants",id,{from:v2.price,to:p});toast("Price updated");await loadInv()}}}
+ else if(a==="bmode")S.bulk.mode=id;
+ else if(a==="bcat")S.bulk.cat=id;
+ else if(a==="baddrow")S.bill.rows.push({v:"",q:"",raw:""});
+ else if(a==="brm")S.bill.rows.splice(+id,1);
+ else if(a==="bapply"){
+  var B=S.bulk,rows=[],bad=[],det=[],today2=new Date().toISOString().slice(0,10);
+  Object.keys(B.vals).forEach(function(k){var x=B.vals[k];if(x===""||isNaN(+x))return;x=parseInt(x,10);
+   var vv=S.inv.find(function(z){return z.id==k}),cur=vv.inv?vv.inv.total:0,res=vv.inv?vv.inv.reserved:0,t=B.mode==="add"?cur+x:x;
+   if(t<res||t<0){bad.push(vv.products.name+" "+vv.label);return}
+   var row={variant_id:+k,total:t};if(B.mode==="add")row.last_received=today2;
+   rows.push(row);det.push({v:+k,from:cur,to:t})});
+  if(bad.length){alert("Reserved stock se kam nahi ho sakta: "+bad.join(", "));render();return}
+  if(!rows.length||!confirm(rows.length+" items ka stock update karna hai?"))return;
+  var rb=await sb.from("inventory").upsert(rows);
+  if(rb.error)alert(rb.error.message);else{await audit("bulk_stock","inventory","bulk",{mode:B.mode,items:det});S.bulk.vals={};toast("Stock updated");await loadInv()}}
+ else if(a==="bsave"){
+  var agg={};
+  S.bill.rows.forEach(function(r){var q=parseInt(r.q,10);if(r.v&&q>0)agg[r.v]=(agg[r.v]||0)+q});
+  var ks=Object.keys(agg);
+  if(!ks.length){alert("Koi item/quantity nahi hai.");return}
+  if(!confirm(ks.length+" items ka stock badhana hai?"))return;
+  var rows2=[],det2=[];
+  ks.forEach(function(k){var vv=S.inv.find(function(z){return z.id==k}),cur=vv.inv?vv.inv.total:0;rows2.push({variant_id:+k,total:cur+agg[k],last_received:new Date().toISOString().slice(0,10)});det2.push({v:+k,qty:agg[k]})});
+  var rs=await sb.from("inventory").upsert(rows2);
+  if(rs.error)alert(rs.error.message);else{await audit("bill_stock","inventory","bill",{file:S.bill.name,items:det2});S.bill={busy:false,msg:"",name:"",rows:[],err:"",done:false};toast("Stock updated");await loadInv();S.view="stock"}}
+ else if(a==="gst"){
+  var v4=S.inv.find(function(x){return x.id==id}),g=prompt("GST % for "+v4.products.brand+" "+v4.products.name+" (sab sizes par lagega). 0, 5, 12, 18 ya 28",v4.products.gst_percent);
+  if(g!==null){g=parseFloat(g);
+   if([0,5,12,18,28].indexOf(g)<0)alert("Sirf 0, 5, 12, 18 ya 28 daalo");
+   else{var rg=await sb.from("products").update({gst_percent:g}).eq("id",v4.product_id);
+    if(rg.error)alert(rg.error.message);else{await audit("gst_change","products",v4.product_id,{from:v4.products.gst_percent,to:g});toast("GST updated (naye orders par lagega)");await loadInv()}}}}
  else if(a==="vis"){
   var v3=S.inv.find(function(x){return x.id==id});
   var r6=await sb.from("variants").update({active:!v3.active}).eq("id",id);
@@ -141,7 +246,12 @@ document.addEventListener("input",function(e){
  var i=e.target.id;
  if(i==="phone")S.phone=e.target.value.replace(/\D/g,"");
  else if(i==="otp")S.otp=e.target.value.replace(/\D/g,"");
- else if(i==="q"){S.q=e.target.value;var pos=e.target.selectionStart;render();var el=document.getElementById("q");if(el){el.focus();el.setSelectionRange(pos,pos)}}});
-setInterval(function(){if(S.user&&S.role&&S.role!=="customer"&&!document.hidden){loadOrders().then(render)}},20000);
+ else if(i==="q"){S.q=e.target.value;var pos=e.target.selectionStart;render();var el=document.getElementById("q");if(el){el.focus();el.setSelectionRange(pos,pos)}}
+ else if(e.target.dataset.bulk){S.bulk.vals[e.target.dataset.bulk]=e.target.value}
+ else if(e.target.dataset.bi!=null&&e.target.dataset.f==="q"){S.bill.rows[+e.target.dataset.bi].q=e.target.value}});
+document.addEventListener("change",function(e){var t=e.target;
+ if(t.id==="billfile"&&t.files&&t.files[0])processBill(t.files[0]);
+ else if(t.dataset&&t.dataset.bi!=null&&t.dataset.f==="v")S.bill.rows[+t.dataset.bi].v=t.value});
+setInterval(function(){if(S.user&&S.role&&S.role!=="customer"&&S.view==="orders"&&!document.hidden){loadOrders().then(render)}},20000);
 render();whoami();
 </script></body></html>
