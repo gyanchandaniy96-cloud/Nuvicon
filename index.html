@@ -39,7 +39,7 @@ nav button.on{color:var(--ink);box-shadow:inset 0 3px 0 var(--acc)}
 var U="https://ptbaxvqvwhgowflxzqmh.supabase.co",K="sb_publishable_QeRuu6oa6UKMuPTaIjgLcg_BuX-n2dI";
 var sb=window.supabase.createClient(U,K);
 var FLOW=["placed","staged","picked_up","in_transit","delivered"],LBL={placed:"Placed",staged:"Staged",picked_up:"Picked up",in_transit:"In transit",delivered:"Delivered",cancelled:"Cancelled"};
-var S={user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",partners:[],vehicles:[],rates:[],zones:[],pf:{name:"",phone:""},cfg:{hours:[],force:false,low:20},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
+var S={user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",partners:[],vehicles:[],rates:[],zones:[],pf:{name:"",phone:""},zonef:"",cfg:{hours:[],force:false,low:20,city:"Pusad",gkey:"",godown:null,rad:30,dfee:0},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
 function esc(t){return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}
 function fmt(n){return "₹"+Math.round(Number(n)).toLocaleString("en-IN")}
 function toast(m){var t=document.getElementById("toast");t.innerHTML='<div class="toast">'+esc(m)+'</div>';setTimeout(function(){t.innerHTML=""},2500)}
@@ -54,7 +54,7 @@ async function whoami(){
  if(S.role!=="customer"){await loadAll()}
  render()}
 async function loadOrders(){
- var r=await sb.from("orders").select("id,order_no,total,subtotal,gst_total,status,pay_status,pay_method,address,created_at,profiles(phone,full_name),zones(name),order_items(product_name,variant_label,qty,unit_price),partner_id,vehicle_id,partner_fee,cod_collected,partners(name,phone),vehicles(reg_no)").order("created_at",{ascending:false}).limit(200);
+ var r=await sb.from("orders").select("id,order_no,total,subtotal,gst_total,status,pay_status,pay_method,address,created_at,profiles(phone,full_name),zones(name),order_items(product_name,variant_label,qty,unit_price),partner_id,vehicle_id,partner_fee,cod_collected,partners(name,phone),vehicles(reg_no),area_text,delivery_lat,delivery_lng,distance_km").order("created_at",{ascending:false}).limit(200);
  if(r.error){S.loadErr=r.error.message}else{S.orders=r.data;S.loadErr=""}}
 async function loadInv(){
  var r=await sb.from("variants").select("id,label,price,active,product_id,products(brand,name,gst_percent,category),inventory(total,reserved)").order("product_id").order("id");
@@ -74,9 +74,9 @@ function ordersV(){
 function orderCard(o){
  var i=FLOW.indexOf(o.status),nx=i>-1&&i<4?FLOW[i+1]:null,op=S.open[o.id];
  var c=o.profiles||{};
- return '<div class="card"><div class="flex" data-a="tog" data-id="'+o.id+'" style="cursor:pointer"><div><b>#'+esc(o.order_no)+'</b> <span class="pill '+o.status+'">'+LBL[o.status]+'</span><br><small>'+esc(c.full_name||c.phone||"Customer")+', '+esc(o.zones&&o.zones.name)+', '+dt(o.created_at)+'</small></div><b>'+fmt(o.total)+'</b></div>'+
+ return '<div class="card"><div class="flex" data-a="tog" data-id="'+o.id+'" style="cursor:pointer"><div><b>#'+esc(o.order_no)+'</b> <span class="pill '+o.status+'">'+LBL[o.status]+'</span><br><small>'+esc(c.full_name||c.phone||"Customer")+', '+esc((o.zones&&o.zones.name)||o.area_text||"")+(o.distance_km!=null?' ('+o.distance_km+' km)':'')+', '+dt(o.created_at)+'</small></div><b>'+fmt(o.total)+'</b></div>'+
  (op?'<div class="items">'+o.order_items.map(function(l){return esc(l.qty)+' × '+esc(l.product_name)+' ('+esc(l.variant_label)+') '+fmt(l.unit_price*l.qty)}).join("<br>")+'<br><small>Subtotal '+fmt(o.subtotal)+' + GST '+fmt(o.gst_total)+'</small></div>'+
- '<div><small>Phone: <a href="tel:+'+esc(c.phone)+'">'+esc(c.phone)+'</a><br>Address: '+esc(o.address||"-")+'<br>Payment: '+esc(o.pay_method==="on_delivery"?"On delivery":"Online")+', '+esc(o.pay_status)+(o.cod_collected!=null?', collected '+fmt(o.cod_collected):'')+'<br>Partner: '+esc(o.partners?o.partners.name+" (+"+o.partners.phone+")"+(o.vehicles?", "+o.vehicles.reg_no:"")+", fee "+fmt(o.partner_fee||0):"abhi assign nahi")+'</small>'+(o.status!=="delivered"&&o.status!=="cancelled"?'<br><button class="btn ghost sm" data-a="asg" data-id="'+o.id+'" style="margin-top:6px">'+(o.partners?"Partner badlo":"Partner assign karo")+'</button>':'')+'</div>':'')+
+ '<div><small>Phone: <a href="tel:+'+esc(c.phone)+'">'+esc(c.phone)+'</a><br>Address: '+esc(o.address||"-")+(o.distance_km!=null?'<br>Godown se '+o.distance_km+' km':'')+(o.delivery_lat!=null?' <a href="https://www.google.com/maps/dir/?api=1&destination='+o.delivery_lat+','+o.delivery_lng+'" target="_blank" rel="noopener">Map</a>':'')+'<br>Payment: '+esc(o.pay_method==="on_delivery"?"On delivery":"Online")+', '+esc(o.pay_status)+(o.cod_collected!=null?', collected '+fmt(o.cod_collected):'')+'<br>Partner: '+esc(o.partners?o.partners.name+" (+"+o.partners.phone+")"+(o.vehicles?", "+o.vehicles.reg_no:"")+", fee "+fmt(o.partner_fee||0):"abhi assign nahi")+'</small>'+(o.status!=="delivered"&&o.status!=="cancelled"?'<br><button class="btn ghost sm" data-a="asg" data-id="'+o.id+'" style="margin-top:6px">'+(o.partners?"Partner badlo":"Partner assign karo")+'</button>':'')+'</div>':'')+
  (nx||(o.status!=="delivered"&&o.status!=="cancelled")?'<div class="flex" style="margin-top:10px">'+(nx?'<button class="btn" data-a="st" data-id="'+o.id+'" data-s="'+nx+'">Mark '+LBL[nx]+'</button>':'<span></span>')+(o.status!=="delivered"&&o.status!=="cancelled"?'<button class="btn bad sm" data-a="st" data-id="'+o.id+'" data-s="cancelled">Cancel</button>':'')+'</div>':'')+'</div>'}
 
 function loadScript(u){return new Promise(function(res,rej){var t=document.createElement("script");t.src=u;t.onload=res;t.onerror=function(){rej(new Error("Load nahi hua: "+u))};document.head.appendChild(t)})}
@@ -154,13 +154,13 @@ function billV(){
   '<div class="flex" style="margin-top:8px"><button class="btn ghost" data-a="baddrow">+ Row</button><button class="btn" data-a="bsave">Stock mein jodo</button></div>':'')}
 
 function why(msg,req){var r=prompt(msg+"\nKaaran likho"+(req?" (zaroori)":" (optional)"));if(r===null)return null;r=r.trim();if(req&&!r){alert("Kaaran zaroori hai");return null}return r}
-var ALBL={price_change:"Price change",gst_change:"GST change",stock_received:"Stock received",bulk_stock:"Bulk stock",bill_stock:"Bill stock",visibility:"Show / Hide",order_status:"Order status",order_note:"Order note",staff_role:"Staff role",staff_invited:"Staff invited",partner_assigned:"Partner assigned",partner_added:"Partner added",partner_status:"Partner status",vehicle_added:"Vehicle added",vehicle_status:"Vehicle status",rate_card:"Rate card",store_hours:"Store timing",store_setting:"Store setting",low_stock:"Low stock limit"};
+var ALBL={price_change:"Price change",gst_change:"GST change",stock_received:"Stock received",bulk_stock:"Bulk stock",bill_stock:"Bill stock",visibility:"Show / Hide",order_status:"Order status",order_note:"Order note",staff_role:"Staff role",staff_invited:"Staff invited",partner_assigned:"Partner assigned",partner_added:"Partner added",partner_status:"Partner status",vehicle_added:"Vehicle added",vehicle_status:"Vehicle status",rate_card:"Rate card",store_hours:"Store timing",store_setting:"Store setting",zone_change:"Zone",low_stock:"Low stock limit"};
 var DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 async function loadCfg(){
  var h=await sb.from("store_hours").select("day,is_open,opens,closes").order("day");
  var st=await sb.from("settings").select("key,value");
  if(h.data)S.cfg.hours=h.data;
- if(st.data)st.data.forEach(function(x){if(x.key==="force_closed")S.cfg.force=(x.value===true||x.value==="true");if(x.key==="low_stock_threshold")S.cfg.low=Number(x.value)||20})}
+ if(st.data)st.data.forEach(function(x){if(x.key==="force_closed")S.cfg.force=(x.value===true||x.value==="true");if(x.key==="low_stock_threshold")S.cfg.low=Number(x.value)||20;if(x.key==="city"&&x.value)S.cfg.city=String(x.value);if(x.key==="gmaps_key")S.cfg.gkey=x.value?String(x.value):"";if(x.key==="godown"&&x.value&&x.value.lat!=null)S.cfg.godown={lat:+x.value.lat,lng:+x.value.lng};if(x.key==="max_radius_km")S.cfg.rad=Number(x.value)||0;if(x.key==="default_partner_fee")S.cfg.dfee=Number(x.value)||0})}
 async function loadStaff(){
  var p=await sb.from("profiles").select("id,full_name,phone,role").in("role",["staff","admin"]).order("created_at");
  var i=await sb.from("staff_invites").select("phone,role,full_name");
@@ -189,6 +189,7 @@ function sumry(a){var d=a.details||{};
  case"staff_role":return d.from+" → "+d.to;
  case"staff_invited":return "Invited as "+d.to;
  case"order_note":return "Cancel";
+ case"zone_change":return (d.name||"")+": "+(d.what||"");
  case"partner_assigned":return (d.partner||"")+", fee "+fmt(d.fee||0);
  case"partner_added":return d.name||"";
  case"partner_status":return (d.name||"")+" → "+d.to;
@@ -227,13 +228,18 @@ function settingsV(){
  return '<h1>Settings</h1>'+backBtn()+
  '<div class="card flex" style="margin-top:8px"><div><b>Store '+(c.force?'abhi band hai':'chalu hai')+'</b><br><small>Band karte hi naye orders ruk jayenge.</small></div><button class="btn '+(c.force?'':'bad ')+'sm" data-a="sforce">'+(c.force?'Kholo':'Band karo')+'</button></div>'+
  '<div class="card"><b>Store timing</b>'+c.hours.map(function(h){return '<div class="flex" style="margin:8px 0"><span style="width:78px">'+DAYS[h.day].slice(0,3)+'</span><label><input type="checkbox" data-sh="'+h.day+'" data-f="open"'+(h.is_open?' checked':'')+' style="width:auto;margin:0"> Open</label><input type="time" data-sh="'+h.day+'" data-f="opens" value="'+esc(String(h.opens).slice(0,5))+'" style="width:105px;margin:0"><input type="time" data-sh="'+h.day+'" data-f="closes" value="'+esc(String(h.closes).slice(0,5))+'" style="width:105px;margin:0"></div>'}).join("")+'<button class="btn" data-a="shsave">Timing save karo</button></div>'+
+ '<div class="card"><b>Google Maps key</b><br><small>Customer app ka map isi key se chalta hai. Key ya Godown ki location khali ho, to purana zone-wala tarika chalta hai.</small><input id="gmk" value="'+esc(c.gkey)+'" placeholder="AIza..." style="margin-top:8px"><button class="btn" data-a="sgm">Save</button></div>'+
+ '<div class="card"><b>Godown ki location</b><br><small>Yahin se customer ki doori nikalti hai. Godown pe khade hoke "Meri location" dabao.</small><input id="glat" inputmode="decimal" placeholder="Latitude (jaise 19.9012)" value="'+(c.godown?c.godown.lat:"")+'" style="margin-top:8px"><input id="glng" inputmode="decimal" placeholder="Longitude (jaise 77.5701)" value="'+(c.godown?c.godown.lng:"")+'"><div class="flex"><button class="btn ghost sm" data-a="gmy">Meri location</button><button class="btn sm" data-a="sgd">Save</button></div>'+(c.godown?'<div style="margin-top:8px"><a href="https://www.google.com/maps?q='+c.godown.lat+','+c.godown.lng+'" target="_blank" rel="noopener">Google Map pe dekho</a></div>':'')+'</div>'+
+ '<div class="card"><b>Max delivery doori (km)</b><br><small>Godown se itne km se door ke orders customer app nahi lega. 0 likho to limit nahi.</small><input id="radv" type="number" inputmode="numeric" value="'+c.rad+'" style="margin-top:8px"><button class="btn" data-a="srad">Save</button></div>'+
+ '<div class="card"><b>Shehar / Godown</b><br><small>Customer app mein "Construction materials from our ___ Godown" aur partner ke map mein yahi naam aata hai.</small><input id="cityv" value="'+esc(c.city)+'" style="margin-top:8px"><button class="btn" data-a="scity">Save</button></div>'+
+ '<div class="card"><b>Delivery zones</b><br><small>Customer yahi areas chunta hai. Purane area hide kar do, naye jodo.</small><div style="margin-top:8px"></div>'+S.zones.map(function(z){return '<div class="flex" style="margin:6px 0"><div><b>'+esc(z.name)+'</b> '+(z.active?'':'<span class="pill out">Hidden</span>')+'</div><div><button class="btn ghost sm" data-a="zren" data-id="'+z.id+'">Naam</button> <button class="btn ghost sm" data-a="zvis" data-id="'+z.id+'">'+(z.active?'Hide':'Show')+'</button></div></div>'}).join("")+'<input data-zf="1" placeholder="Naya area ka naam" value="'+esc(S.zonef)+'" style="margin-top:8px"><button class="btn" data-a="zadd">Area jodo</button></div>'+
  '<div class="card"><b>Low stock limit</b><br><small>Itne ya kam bache to "Low" dikhega.</small><input type="number" inputmode="numeric" id="lowv" value="'+c.low+'" style="margin-top:8px"><button class="btn" data-a="slow">Save</button></div>'}
 
 async function loadPartners(){
  var a=await sb.from("partners").select("id,name,phone,status,active").order("id");
  var b=await sb.from("vehicles").select("id,partner_id,reg_no,vtype,insurance_expires,active").order("id");
  var c=await sb.from("rate_card").select("zone_id,fee");
- var d=await sb.from("zones").select("id,name").order("name");
+ var d=await sb.from("zones").select("id,name,active").order("id");
  S.partners=a.data||[];S.vehicles=b.data||[];S.rates=c.data||[];S.zones=d.data||[];
  if(a.error&&S.view==="partners")S.loadErr=a.error.message}
 function partnersV(){
@@ -248,8 +254,8 @@ function partnersV(){
    (p.status!=="approved"?'<button class="btn sm" data-a="pst" data-id="'+p.id+'" data-s="approved">Approve</button>':'<button class="btn bad sm" data-a="pst" data-id="'+p.id+'" data-s="suspended">Suspend</button>')+'</div></div>'+
    vs.map(function(v){var exp=v.insurance_expires&&v.insurance_expires<today;return '<div class="flex" style="margin-top:8px"><div><b>'+esc(v.reg_no)+'</b> <small>'+esc(v.vtype||"")+(v.insurance_expires?', insurance '+esc(v.insurance_expires):'')+'</small> '+(exp?'<span class="pill out">Insurance expired</span>':'')+(v.active?'':'<span class="pill out">Band</span>')+'</div><button class="btn ghost sm" data-a="vst" data-id="'+v.id+'">'+(v.active?'Band karo':'Chalu karo')+'</button></div>'}).join("")+
    '<button class="btn ghost sm" data-a="vadd" data-id="'+p.id+'" style="margin-top:8px">+ Gaadi jodo</button></div>'}).join("")+
- '<h1 style="font-size:16px">Rate card (partner ko milne wala fee)</h1><small>Har zone ke liye ek order ka fee. Order assign karte waqt yahi fee lagta hai.</small><div style="margin-top:8px"></div>'+
- S.zones.map(function(z){var r=rate(z.id);return '<div class="card flex"><div><b>'+esc(z.name)+'</b><br><small>'+(r==null?'Fee set nahi':fmt(r))+'</small></div><button class="btn sm" data-a="rate" data-id="'+z.id+'">'+(r==null?'Set':'Badlo')+'</button></div>'}).join("")}
+ '<div class="card flex" style="margin-top:12px"><div><b>Default fee</b><br><small>Map pin wale orders (jinka zone nahi) ke liye: '+fmt(S.cfg.dfee)+'</small></div><button class="btn sm" data-a="dfee">Badlo</button></div><h1 style="font-size:16px">Rate card (partner ko milne wala fee)</h1><small>Har zone ke liye ek order ka fee. Order assign karte waqt yahi fee lagta hai.</small><div style="margin-top:8px"></div>'+
+ S.zones.filter(function(z){return z.active}).map(function(z){var r=rate(z.id);return '<div class="card flex"><div><b>'+esc(z.name)+'</b><br><small>'+(r==null?'Fee set nahi':fmt(r))+'</small></div><button class="btn sm" data-a="rate" data-id="'+z.id+'">'+(r==null?'Set':'Badlo')+'</button></div>'}).join("")}
 function viewHtml(){var v=S.view;
  if((v==="staff"||v==="settings"||v==="partners")&&S.role!=="admin")v="more";
  return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():v==="partners"?partnersV():catV()}
@@ -367,6 +373,48 @@ document.addEventListener("click",async function(e){
   var hrows=S.cfg.hours.map(function(h){return {day:h.day,is_open:h.is_open,opens:String(h.opens).slice(0,5),closes:String(h.closes).slice(0,5)}});
   var rsh=await sb.from("store_hours").upsert(hrows);
   if(rsh.error)alert(rsh.error.message);else{await audit("store_hours","store_hours","all",{hours:hrows,reason:rh});toast("Timing save");await loadCfg()}}
+ else if(a==="sgm"){
+  var gk=document.getElementById("gmk").value.trim();var gw=why("Maps key",false);if(gw===null)return;
+  var gr=await sb.from("settings").upsert({key:"gmaps_key",value:gk});
+  if(gr.error)alert(gr.error.message);else{await audit("store_setting","settings","gmaps_key",{gmaps_key:gk?"set":"removed",reason:gw});S.cfg.gkey=gk;toast("Save ho gaya")}}
+ else if(a==="gmy"){
+  if(!navigator.geolocation){alert("Is phone mein location nahi mil sakti");return}
+  navigator.geolocation.getCurrentPosition(function(p){document.getElementById("glat").value=p.coords.latitude.toFixed(6);document.getElementById("glng").value=p.coords.longitude.toFixed(6);toast("Location mil gayi. Ab Save dabao")},function(){alert("Location nahi mili. Permission do")},{enableHighAccuracy:true,timeout:15000});return}
+ else if(a==="sgd"){
+  var la=parseFloat(document.getElementById("glat").value),lo=parseFloat(document.getElementById("glng").value);
+  if(!(la>=-90&&la<=90&&lo>=-180&&lo<=180)){alert("Sahi latitude aur longitude daalo");return}
+  var gdw=why("Godown ki location badal rahe ho",true);if(gdw===null)return;
+  var gdr=await sb.from("settings").upsert({key:"godown",value:{lat:la,lng:lo}});
+  if(gdr.error)alert(gdr.error.message);else{await audit("store_setting","settings","godown",{lat:la,lng:lo,reason:gdw});S.cfg.godown={lat:la,lng:lo};toast("Godown ki location save")}}
+ else if(a==="srad"){
+  var rv=parseFloat(document.getElementById("radv").value);if(!(rv>=0)){alert("Number daalo");return}
+  var rw2=why("Max delivery doori badal rahe ho",true);if(rw2===null)return;
+  var rr7=await sb.from("settings").upsert({key:"max_radius_km",value:rv});
+  if(rr7.error)alert(rr7.error.message);else{await audit("store_setting","settings","max_radius_km",{km:rv,reason:rw2});S.cfg.rad=rv;toast("Save ho gaya")}}
+ else if(a==="dfee"){
+  var df=prompt("Default partner fee (₹), jab order ka koi zone nahi (map pin wale orders)",S.cfg.dfee);df=parseFloat(df);
+  if(df>=0){var dw=why("Default fee badal rahe ho",true);if(dw===null)return;
+   var dr=await sb.from("settings").upsert({key:"default_partner_fee",value:df});
+   if(dr.error)alert(dr.error.message);else{await audit("store_setting","settings","default_partner_fee",{fee:df,reason:dw});S.cfg.dfee=df;toast("Save ho gaya")}}}
+ else if(a==="scity"){
+  var cv=document.getElementById("cityv").value.trim();if(!cv){alert("Shehar ka naam likho");return}
+  var cw=why("Shehar badal rahe ho",true);if(cw===null)return;
+  var cr=await sb.from("settings").upsert({key:"city",value:cv});
+  if(cr.error)alert(cr.error.message);else{await audit("store_setting","settings","city",{city:cv,reason:cw});S.cfg.city=cv;toast("Save ho gaya")}}
+ else if(a==="zadd"){
+  var zn=S.zonef.trim();if(!zn){alert("Area ka naam likho");return}
+  var zr=await sb.from("zones").insert({name:zn}).select("id").single();
+  if(zr.error)alert(zr.error.message.indexOf("zones_name_key")>-1?"Yeh area pehle se hai":zr.error.message);
+  else{await audit("zone_change","zones",zr.data.id,{name:zn,what:"added",reason:"added from panel"});S.zonef="";toast("Area jud gaya. Rate card mein uska fee set karo");await loadPartners()}}
+ else if(a==="zren"){
+  var zo=S.zones.find(function(x){return x.id==id}),zm=prompt("Naya naam",zo.name);
+  if(zm!==null&&zm.trim()&&zm.trim()!==zo.name){var zq=why("Area ka naam badal rahe ho",true);if(zq===null)return;
+   var zs=await sb.from("zones").update({name:zm.trim()}).eq("id",id);
+   if(zs.error)alert(zs.error.message);else{await audit("zone_change","zones",id,{name:zm.trim(),what:"renamed from "+zo.name,reason:zq});toast("Naam badal gaya");await loadPartners()}}}
+ else if(a==="zvis"){
+  var zv=S.zones.find(function(x){return x.id==id}),zw=why((zv.active?"Area hide kar rahe ho: ":"Area dikha rahe ho: ")+zv.name,true);if(zw===null)return;
+  var zy=await sb.from("zones").update({active:!zv.active}).eq("id",id);
+  if(zy.error)alert(zy.error.message);else{await audit("zone_change","zones",id,{name:zv.name,what:zv.active?"hidden":"shown",reason:zw});await loadPartners()}}
  else if(a==="slow"){
   var lv=parseInt(document.getElementById("lowv").value,10);if(!(lv>=0)){alert("Number daalo");return}
   var rl=why("Low stock limit badal rahe ho",true);if(rl===null)return;
@@ -420,6 +468,7 @@ document.addEventListener("input",function(e){
  else if(i==="q"){S.q=e.target.value;var pos=e.target.selectionStart;render();var el=document.getElementById("q");if(el){el.focus();el.setSelectionRange(pos,pos)}}
  else if(e.target.dataset.bulk){S.bulk.vals[e.target.dataset.bulk]=e.target.value}
  else if(e.target.dataset.bi!=null&&e.target.dataset.f==="q"){S.bill.rows[+e.target.dataset.bi].q=e.target.value}
+ else if(e.target.dataset.zf){S.zonef=e.target.value}
  else if(e.target.dataset.pf){var pv=e.target.value;if(e.target.dataset.pf==="phone")pv=pv.replace(/\D/g,"");S.pf[e.target.dataset.pf]=pv}
  else if(e.target.dataset.sf){var sv=e.target.value;if(e.target.dataset.sf==="phone")sv=sv.replace(/\D/g,"");S.sf[e.target.dataset.sf]=sv}
  else if(e.target.dataset.af==="q"){S.af.q=e.target.value;var ps=e.target.selectionStart;render();var ea=document.getElementById("aq");if(ea){ea.focus();ea.setSelectionRange(ps,ps)}}});
