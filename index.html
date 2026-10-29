@@ -36,10 +36,10 @@ nav button.on{color:var(--ink);box-shadow:inset 0 3px 0 var(--acc)}
 </style></head><body>
 <div id="app"></div><nav id="nav"></nav><div id="toast"></div>
 <script>
-var U="https://lievssgahoruyviciylz.supabase.co",K="sb_publishable_6OoFSHYl0fFS7gqNTs5jwA_DZs5K4Jn";
+var U="https://ptbaxvqvwhgowflxzqmh.supabase.co",K="sb_publishable_QeRuu6oa6UKMuPTaIjgLcg_BuX-n2dI";
 var sb=window.supabase.createClient(U,K);
 var FLOW=["placed","staged","picked_up","in_transit","delivered"],LBL={placed:"Placed",staged:"Staged",picked_up:"Picked up",in_transit:"In transit",delivered:"Delivered",cancelled:"Cancelled"};
-var S={user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
+var S={user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",cfg:{hours:[],force:false,low:20},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
 function esc(t){return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}
 function fmt(n){return "₹"+Math.round(Number(n)).toLocaleString("en-IN")}
 function toast(m){var t=document.getElementById("toast");t.innerHTML='<div class="toast">'+esc(m)+'</div>';setTimeout(function(){t.innerHTML=""},2500)}
@@ -59,7 +59,7 @@ async function loadOrders(){
 async function loadInv(){
  var r=await sb.from("variants").select("id,label,price,active,product_id,products(brand,name,gst_percent,category),inventory(total,reserved)").order("product_id").order("id");
  if(r.error){S.loadErr=r.error.message}else{S.inv=r.data.map(function(v){v.inv=Array.isArray(v.inventory)?v.inventory[0]:v.inventory;return v})}}
-async function loadAll(){await Promise.all([loadOrders(),loadInv()])}
+async function loadAll(){await Promise.all([loadOrders(),loadInv(),loadCfg()])}
 function ordersV(){
  var act=S.orders.filter(function(o){return o.status!=="delivered"&&o.status!=="cancelled"});
  var today=new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Kolkata"});
@@ -152,17 +152,91 @@ function billV(){
   b.rows.map(function(r,i){return '<div class="card"><select data-bi="'+i+'" data-f="v"><option value="">— skip —</option>'+S.inv.map(function(v){return '<option value="'+v.id+'"'+(String(v.id)===String(r.v)?' selected':'')+'>'+esc(v.products.brand+" "+v.products.name+" - "+v.label)+'</option>'}).join("")+'</select>'+
    '<div class="flex"><input type="number" inputmode="numeric" min="0" data-bi="'+i+'" data-f="q" value="'+esc(r.q)+'" placeholder="Qty" style="width:110px;margin:0"><button class="btn bad sm" data-a="brm" data-id="'+i+'">Hatao</button></div>'+(r.raw?'<small>Bill line: '+esc(r.raw)+'</small>':'')+'</div>'}).join("")+
   '<div class="flex" style="margin-top:8px"><button class="btn ghost" data-a="baddrow">+ Row</button><button class="btn" data-a="bsave">Stock mein jodo</button></div>':'')}
-function stk(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<1?["out","Out"]:a<=20?["low","Low"]:["ok","OK"]}
+
+function why(msg,req){var r=prompt(msg+"\nKaaran likho"+(req?" (zaroori)":" (optional)"));if(r===null)return null;r=r.trim();if(req&&!r){alert("Kaaran zaroori hai");return null}return r}
+var ALBL={price_change:"Price change",gst_change:"GST change",stock_received:"Stock received",bulk_stock:"Bulk stock",bill_stock:"Bill stock",visibility:"Show / Hide",order_status:"Order status",order_note:"Order note",staff_role:"Staff role",staff_invited:"Staff invited",store_hours:"Store timing",store_setting:"Store setting",low_stock:"Low stock limit"};
+var DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+async function loadCfg(){
+ var h=await sb.from("store_hours").select("day,is_open,opens,closes").order("day");
+ var st=await sb.from("settings").select("key,value");
+ if(h.data)S.cfg.hours=h.data;
+ if(st.data)st.data.forEach(function(x){if(x.key==="force_closed")S.cfg.force=(x.value===true||x.value==="true");if(x.key==="low_stock_threshold")S.cfg.low=Number(x.value)||20})}
+async function loadStaff(){
+ var p=await sb.from("profiles").select("id,full_name,phone,role").in("role",["staff","admin"]).order("created_at");
+ var i=await sb.from("staff_invites").select("phone,role,full_name");
+ S.staff=p.data||[];S.invites=i.data||[];if(p.error)S.loadErr=p.error.message}
+async function loadAudit(){
+ var a=await sb.from("audit_log").select("id,at,user_id,action,entity,entity_id,details").order("at",{ascending:false}).limit(300);
+ var p=await sb.from("profiles").select("id,full_name,phone,role");
+ S.profs={};(p.data||[]).forEach(function(x){S.profs[x.id]=x});
+ S.audit=a.data||[];if(a.error)S.loadErr=a.error.message}
+function entLabel(a){var d=a.details||{},id=a.entity_id;
+ if(a.entity==="variants"||(a.entity==="inventory"&&/^\d+$/.test(id))){var v=S.inv.find(function(x){return String(x.id)===String(id)});return v?v.products.brand+" "+v.products.name+" "+v.label:"Variant "+id}
+ if(a.entity==="products"){var v2=S.inv.find(function(x){return String(x.product_id)===String(id)});return v2?v2.products.brand+" "+v2.products.name:"Product "+id}
+ if(a.entity==="orders")return "NVC"+id;
+ if(a.entity==="profiles")return d.phone?"+"+d.phone:id;
+ if(id==="bulk")return "Bulk update";if(id==="bill")return d.file||"Bill";
+ return ((a.entity||"")+" "+(id||"")).trim()}
+function sumry(a){var d=a.details||{};
+ switch(a.action){
+ case"price_change":return fmt(d.from)+" → "+fmt(d.to);
+ case"gst_change":return d.from+"% → "+d.to+"%";
+ case"stock_received":return "+"+d.qty+" (total "+d.total+")";
+ case"bulk_stock":return (d.mode==="set"?"Exact count":"Add")+", "+(d.items||[]).length+" items";
+ case"bill_stock":return (d.items||[]).length+" items add hue";
+ case"visibility":return d.active?"Hidden → Shown":"Shown → Hidden";
+ case"order_status":return (LBL[d.from]||d.from)+" → "+(LBL[d.to]||d.to);
+ case"staff_role":return d.from+" → "+d.to;
+ case"staff_invited":return "Invited as "+d.to;
+ case"order_note":return "Cancel";
+ default:var c=Object.assign({},d);delete c.reason;var t=JSON.stringify(c);return t.length>90?t.slice(0,90)+"…":t}}
+function backBtn(){return '<button class="btn ghost sm" data-a="go" data-id="more">&larr; More</button>'}
+function moreV(){
+ var it=function(id,t,sub){return '<div class="card flex" data-a="go" data-id="'+id+'" style="cursor:pointer"><div><b>'+t+'</b><br><small>'+sub+'</small></div><span>&rsaquo;</span></div>'};
+ return '<h1>More</h1>'+(S.role==="admin"?it("staff","Staff","Team jodo, role badlo")+it("settings","Settings","Store timing, band/chalu, low stock limit"):"")+it("audit","Audit log","Har badlav ka record")+'<div class="card flex" data-a="out" style="cursor:pointer"><b>Log out</b><span>&rsaquo;</span></div>'}
+function auditV(){
+ var f=S.af,q=f.q.toLowerCase(),users={},acts={};
+ S.audit.forEach(function(a){if(a.user_id)users[a.user_id]=1;acts[a.action]=1});
+ var list=S.audit.filter(function(a){
+  if(f.user&&a.user_id!==f.user)return false;if(f.act&&a.action!==f.act)return false;
+  if(q){var p=S.profs[a.user_id]||{},t=(entLabel(a)+" "+sumry(a)+" "+((a.details||{}).reason||"")+" "+(p.full_name||"")+" "+(p.phone||"")).toLowerCase();if(t.indexOf(q)<0)return false}
+  return true});
+ return '<h1>Audit log</h1>'+backBtn()+'<div class="card" style="background:#f6f5f1;margin-top:8px"><small>Yeh log sirf badhta hai. Isme koi bhi, admin bhi, kuch badal ya hata nahi sakta.</small></div>'+
+ '<input id="aq" data-af="q" placeholder="Search entries" value="'+esc(f.q)+'">'+
+ '<select data-af="user"><option value="">All users</option>'+Object.keys(users).map(function(u){var p=S.profs[u]||{};return '<option value="'+u+'"'+(f.user===u?' selected':'')+'>'+esc(p.full_name||p.phone||u)+'</option>'}).join("")+'</select>'+
+ '<select data-af="act"><option value="">All actions</option>'+Object.keys(acts).map(function(x){return '<option value="'+x+'"'+(f.act===x?' selected':'')+'>'+esc(ALBL[x]||x)+'</option>'}).join("")+'</select>'+
+ '<small>'+list.length+' entries</small><div style="margin-top:8px"></div>'+
+ (S.loadErr?'<div class="err">'+esc(S.loadErr)+'</div>':'')+
+ (list.length?list.map(function(a){var p=S.profs[a.user_id]||{},r=(a.details||{}).reason;
+  return '<div class="card"><div class="flex"><span class="pill">'+esc(ALBL[a.action]||a.action)+'</span><small>'+dt(a.at)+'</small></div><div style="margin-top:6px"><b>'+esc(entLabel(a))+'</b><br>'+esc(sumry(a))+'</div><small>'+esc(p.full_name||(p.phone?"+"+p.phone:"System"))+(p.role?' ('+esc(p.role)+')':'')+'</small>'+(r?'<br><small>Kaaran: '+esc(r)+'</small>':'')+'</div>'}).join(""):'<div class="empty">Koi entry nahi.</div>')}
+function staffV(){
+ var sf=S.sf;
+ return '<h1>Staff</h1>'+backBtn()+
+ '<div class="card" style="margin-top:8px"><b>Naya staff jodo</b><input data-sf="name" placeholder="Naam" value="'+esc(sf.name)+'" style="margin-top:8px"><input data-sf="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" value="'+esc(sf.phone)+'"><select data-sf="role"><option value="staff"'+(sf.role==="staff"?' selected':'')+'>Staff</option><option value="admin"'+(sf.role==="admin"?' selected':'')+'>Admin</option></select><button class="btn" data-a="sadd">Jodo</button><br><small>Is number se OTP login karte hi woh staff ban jayega.</small></div>'+
+ (S.invites.length?'<h1 style="font-size:16px">Pending</h1>'+S.invites.map(function(i){return '<div class="card flex"><div><b>'+esc(i.full_name||"(naam nahi)")+'</b> <span class="pill">'+esc(i.role)+'</span><br><small>+'+esc(i.phone)+', abhi login nahi kiya</small></div><button class="btn bad sm" data-a="sinv" data-id="'+esc(i.phone)+'">Hatao</button></div>'}).join(""):"")+
+ '<h1 style="font-size:16px">Team</h1>'+(S.loadErr?'<div class="err">'+esc(S.loadErr)+'</div>':'')+
+ S.staff.map(function(p){return '<div class="card flex"><div><b>'+esc(p.full_name||"(naam nahi)")+'</b> <span class="pill '+(p.role==="admin"?'staged':'')+'">'+esc(p.role)+'</span><br><small>+'+esc(p.phone)+'</small></div><div><button class="btn sm" data-a="srole" data-id="'+p.id+'">Role</button> <button class="btn ghost sm" data-a="sname" data-id="'+p.id+'">Naam</button></div></div>'}).join("")}
+function settingsV(){
+ var c=S.cfg;
+ return '<h1>Settings</h1>'+backBtn()+
+ '<div class="card flex" style="margin-top:8px"><div><b>Store '+(c.force?'abhi band hai':'chalu hai')+'</b><br><small>Band karte hi naye orders ruk jayenge.</small></div><button class="btn '+(c.force?'':'bad ')+'sm" data-a="sforce">'+(c.force?'Kholo':'Band karo')+'</button></div>'+
+ '<div class="card"><b>Store timing</b>'+c.hours.map(function(h){return '<div class="flex" style="margin:8px 0"><span style="width:78px">'+DAYS[h.day].slice(0,3)+'</span><label><input type="checkbox" data-sh="'+h.day+'" data-f="open"'+(h.is_open?' checked':'')+' style="width:auto;margin:0"> Open</label><input type="time" data-sh="'+h.day+'" data-f="opens" value="'+esc(String(h.opens).slice(0,5))+'" style="width:105px;margin:0"><input type="time" data-sh="'+h.day+'" data-f="closes" value="'+esc(String(h.closes).slice(0,5))+'" style="width:105px;margin:0"></div>'}).join("")+'<button class="btn" data-a="shsave">Timing save karo</button></div>'+
+ '<div class="card"><b>Low stock limit</b><br><small>Itne ya kam bache to "Low" dikhega.</small><input type="number" inputmode="numeric" id="lowv" value="'+c.low+'" style="margin-top:8px"><button class="btn" data-a="slow">Save</button></div>'}
+function viewHtml(){var v=S.view;
+ if((v==="staff"||v==="settings")&&S.role!=="admin")v="more";
+ return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():catV()}
+function navOn(t){var v=S.view;return v===t||(t==="stock"&&(v==="bulk"||v==="bill"))||(t==="more"&&(v==="staff"||v==="settings"||v==="audit"))}
+function stk(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<1?["out","Out"]:a<=S.cfg.low?["low","Low"]:["ok","OK"]}
 function stockV(){
  var s=S.q.toLowerCase(),vs=S.inv.filter(function(v){return (v.products.brand+" "+v.products.name+" "+v.label).toLowerCase().indexOf(s)>-1});
- var low=S.inv.filter(function(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<=20}).length;
+ var low=S.inv.filter(function(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<=S.cfg.low}).length;
  return '<h1>Inventory</h1><small>'+S.inv.length+' variants, '+low+' low or out</small><div class="flex" style="margin:8px 0"><button class="btn sm" data-a="go" data-id="bulk">Bulk update</button><button class="btn sm" data-a="go" data-id="bill">Upload bill</button></div><input id="q" placeholder="Search product or size" value="'+esc(S.q)+'">'+
  (vs.length?vs.map(function(v){var t=stk(v),i=v.inv||{total:0,reserved:0};
   return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+'</small><br><span class="pill '+t[0]+'">'+t[1]+'</span> <small>Available <b>'+(i.total-i.reserved)+'</b>, total '+i.total+', reserved '+i.reserved+'</small></div><button class="btn sm" data-a="recv" data-id="'+v.id+'">+ Receive</button></div>'}).join(""):'<div class="empty">Nothing matches.</div>')}
 function catV(){
  var s=S.q.toLowerCase(),vs=S.inv.filter(function(v){return (v.products.brand+" "+v.products.name+" "+v.label).toLowerCase().indexOf(s)>-1});
  return '<h1>Catalog</h1><input id="q" placeholder="Search product or size" value="'+esc(S.q)+'">'+
- vs.map(function(v){return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', GST '+Number(v.products.gst_percent)+'%</small><br><b>'+fmt(v.price)+'</b> '+(v.active?'':'<span class="pill out">Hidden</span>')+'</div><div><button class="btn sm" data-a="price" data-id="'+v.id+'">Price</button> '+(S.role==="admin"?'<button class="btn sm" data-a="gst" data-id="'+v.id+'">GST</button> ':"")+'<button class="btn ghost sm" data-a="vis" data-id="'+v.id+'">'+(v.active?'Hide':'Show')+'</button></div></div>'}).join("")}
+ vs.map(function(v){return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', GST '+Number(v.products.gst_percent)+'%</small><br><b>'+fmt(v.price)+'</b> '+(v.active?'':'<span class="pill out">Hidden</span>')+'</div>'+(S.role==="admin"?'<div><button class="btn sm" data-a="price" data-id="'+v.id+'">Price</button> <button class="btn sm" data-a="gst" data-id="'+v.id+'">GST</button> <button class="btn ghost sm" data-a="vis" data-id="'+v.id+'">'+(v.active?'Hide':'Show')+'</button></div>':"")+'</div>'}).join("")}
 function loginV(){
  return '<main><h1 style="margin-top:60px">Nuvicon Ops</h1><p class="mut">Staff login</p>'+
  (S.step==="phone"?'<input id="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" value="'+esc(S.phone)+'"><button class="btn" data-a="send"'+(S.busy?' disabled':'')+'>Send code</button>':
@@ -173,12 +247,12 @@ function render(){
  if(S.boot){a.innerHTML='<div class="empty">Loading…</div>';n.innerHTML="";return}
  if(!S.user){a.innerHTML=loginV();n.innerHTML="";return}
  if(S.role==="customer"||!S.role){a.innerHTML='<main><h1 style="margin-top:60px">No access</h1><p class="mut">This number is not a staff account. Ask an admin to give you the staff role.</p><button class="btn ghost" data-a="out">Log out</button></main>';n.innerHTML="";return}
- a.innerHTML='<div class="top"><div><b>NUVICON</b><small>OPS</small></div><div><small style="color:#aaa">'+esc(S.role)+'</small> <button data-a="out">Log out</button></div></div><main>'+(S.view==="orders"?ordersV():S.view==="stock"?stockV():S.view==="bulk"?bulkV():S.view==="bill"?billV():catV())+'</main>';
- n.innerHTML=[["orders","Orders"],["stock","Inventory"],["catalog","Catalog"]].map(function(t){return '<button class="'+((S.view===t[0]||(t[0]==="stock"&&(S.view==="bulk"||S.view==="bill")))?'on':'')+'" data-a="go" data-id="'+t[0]+'">'+t[1]+'</button>'}).join("")}
+ a.innerHTML='<div class="top"><div><b>NUVICON</b><small>OPS</small></div><div><small style="color:#aaa">'+esc(S.role)+'</small> <button data-a="out">Log out</button></div></div><main>'+viewHtml()+'</main>';
+ n.innerHTML=[["orders","Orders"],["stock","Inventory"],["catalog","Catalog"],["more","More"]].map(function(t){return '<button class="'+(navOn(t[0])?'on':'')+'" data-a="go" data-id="'+t[0]+'">'+t[1]+'</button>'}).join("")}
 document.addEventListener("click",async function(e){
  var b=e.target.closest("[data-a]");if(!b||b.disabled)return;
  var a=b.dataset.a,id=b.dataset.id,y=window.scrollY;S.err="";
- if(a==="go"){S.view=id;S.q=""}
+ if(a==="go"){S.view=id;S.q="";S.loadErr="";if(id==="staff")await loadStaff();else if(id==="audit")await loadAudit();else if(id==="settings")await loadCfg()}
  else if(a==="f")S.f=id;
  else if(a==="tog")S.open[id]=!S.open[id];
  else if(a==="back"){S.step="phone";S.otp=""}
@@ -191,21 +265,21 @@ document.addEventListener("click",async function(e){
   if(r2.error)S.err=r2.error.message;else{S.step="phone";S.otp="";S.boot=true;render();return whoami()}}
  else if(a==="st"){
   var s=b.dataset.s;
-  if(s==="cancelled"&&!confirm("Cancel this order? Reserved stock will be released."))return;
+  var rs0=null;if(s==="cancelled"){if(!confirm("Cancel this order? Reserved stock will be released."))return;rs0=why("Order cancel kar rahe ho",true);if(rs0===null)return}
   b.disabled=true;var r3=await sb.rpc("set_order_status",{p_order:+id,p_status:s});
-  if(r3.error){alert(r3.error.message)}else{toast("Order updated")}
+  if(r3.error){alert(r3.error.message)}else{toast("Order updated");if(rs0)await audit("order_note","orders",id,{reason:rs0})}
   await loadAll()}
  else if(a==="recv"){
   var v=S.inv.find(function(x){return x.id==id}),q=prompt("Quantity received for "+v.products.name+" ("+v.label+")");
   q=parseInt(q,10);
-  if(q>0){var tot=(v.inv?v.inv.total:0)+q;
+  if(q>0){var rr=why("Stock receive",false);if(rr===null)return;var tot=(v.inv?v.inv.total:0)+q;
    var r4=await sb.from("inventory").upsert({variant_id:+id,total:tot,last_received:new Date().toISOString().slice(0,10)});
-   if(r4.error)alert(r4.error.message);else{await audit("stock_received","inventory",id,{qty:q,total:tot});toast("Stock updated");await loadInv()}}}
+   if(r4.error)alert(r4.error.message);else{await audit("stock_received","inventory",id,{qty:q,total:tot,reason:rr});toast("Stock updated");await loadInv()}}}
  else if(a==="price"){
   var v2=S.inv.find(function(x){return x.id==id}),p=prompt("New price for "+v2.products.name+" ("+v2.label+"), before GST",v2.price);
   p=parseFloat(p);
-  if(p>=0){var r5=await sb.from("variants").update({price:p}).eq("id",id);
-   if(r5.error)alert(r5.error.message);else{await audit("price_change","variants",id,{from:v2.price,to:p});toast("Price updated");await loadInv()}}}
+  if(p>=0){var rp=why("Price badal rahe ho",true);if(rp===null)return;var r5=await sb.from("variants").update({price:p}).eq("id",id);
+   if(r5.error)alert(r5.error.message);else{await audit("price_change","variants",id,{from:v2.price,to:p,reason:rp});toast("Price updated");await loadInv()}}}
  else if(a==="bmode")S.bulk.mode=id;
  else if(a==="bcat")S.bulk.cat=id;
  else if(a==="baddrow")S.bill.rows.push({v:"",q:"",raw:""});
@@ -218,29 +292,62 @@ document.addEventListener("click",async function(e){
    var row={variant_id:+k,total:t};if(B.mode==="add")row.last_received=today2;
    rows.push(row);det.push({v:+k,from:cur,to:t})});
   if(bad.length){alert("Reserved stock se kam nahi ho sakta: "+bad.join(", "));render();return}
-  if(!rows.length||!confirm(rows.length+" items ka stock update karna hai?"))return;
+  if(!rows.length||!confirm(rows.length+" items ka stock update karna hai?"))return;var rbk=why("Bulk stock update",B.mode==="set");if(rbk===null)return;
   var rb=await sb.from("inventory").upsert(rows);
-  if(rb.error)alert(rb.error.message);else{await audit("bulk_stock","inventory","bulk",{mode:B.mode,items:det});S.bulk.vals={};toast("Stock updated");await loadInv()}}
+  if(rb.error)alert(rb.error.message);else{await audit("bulk_stock","inventory","bulk",{mode:B.mode,items:det,reason:rbk});S.bulk.vals={};toast("Stock updated");await loadInv()}}
  else if(a==="bsave"){
   var agg={};
   S.bill.rows.forEach(function(r){var q=parseInt(r.q,10);if(r.v&&q>0)agg[r.v]=(agg[r.v]||0)+q});
   var ks=Object.keys(agg);
   if(!ks.length){alert("Koi item/quantity nahi hai.");return}
-  if(!confirm(ks.length+" items ka stock badhana hai?"))return;
+  if(!confirm(ks.length+" items ka stock badhana hai?"))return;var rbl=why("Bill se stock",false);if(rbl===null)return;
   var rows2=[],det2=[];
   ks.forEach(function(k){var vv=S.inv.find(function(z){return z.id==k}),cur=vv.inv?vv.inv.total:0;rows2.push({variant_id:+k,total:cur+agg[k],last_received:new Date().toISOString().slice(0,10)});det2.push({v:+k,qty:agg[k]})});
   var rs=await sb.from("inventory").upsert(rows2);
-  if(rs.error)alert(rs.error.message);else{await audit("bill_stock","inventory","bill",{file:S.bill.name,items:det2});S.bill={busy:false,msg:"",name:"",rows:[],err:"",done:false};toast("Stock updated");await loadInv();S.view="stock"}}
+  if(rs.error)alert(rs.error.message);else{await audit("bill_stock","inventory","bill",{file:S.bill.name,items:det2,reason:rbl});S.bill={busy:false,msg:"",name:"",rows:[],err:"",done:false};toast("Stock updated");await loadInv();S.view="stock"}}
  else if(a==="gst"){
   var v4=S.inv.find(function(x){return x.id==id}),g=prompt("GST % for "+v4.products.brand+" "+v4.products.name+" (sab sizes par lagega). 0, 5, 12, 18 ya 28",v4.products.gst_percent);
   if(g!==null){g=parseFloat(g);
    if([0,5,12,18,28].indexOf(g)<0)alert("Sirf 0, 5, 12, 18 ya 28 daalo");
-   else{var rg=await sb.from("products").update({gst_percent:g}).eq("id",v4.product_id);
-    if(rg.error)alert(rg.error.message);else{await audit("gst_change","products",v4.product_id,{from:v4.products.gst_percent,to:g});toast("GST updated (naye orders par lagega)");await loadInv()}}}}
+   else{var rgw=why("GST badal rahe ho",true);if(rgw===null)return;var rg=await sb.from("products").update({gst_percent:g}).eq("id",v4.product_id);
+    if(rg.error)alert(rg.error.message);else{await audit("gst_change","products",v4.product_id,{from:v4.products.gst_percent,to:g,reason:rgw});toast("GST updated (naye orders par lagega)");await loadInv()}}}}
+ else if(a==="sadd"){
+  var sf=S.sf;if(!/^[6-9][0-9]{9}$/.test(sf.phone)){alert("10-digit sahi number daalo");return}
+  var rsa=await sb.rpc("set_staff",{p_phone:sf.phone,p_role:sf.role,p_name:sf.name,p_reason:"added from panel"});
+  if(rsa.error)alert(rsa.error.message);else{toast(rsa.data==="invited"?"Add ho gaya. Number se login karte hi staff banega":"Role update ho gaya");S.sf={name:"",phone:"",role:"staff"};await loadStaff()}}
+ else if(a==="srole"){
+  var sp=S.staff.find(function(x){return x.id===id}),nr=prompt("Naya role likho: staff, admin, ya customer (access hatane ke liye)",sp.role);
+  if(nr!==null){nr=nr.trim().toLowerCase();
+   if(["staff","admin","customer"].indexOf(nr)<0)alert("Sirf staff, admin ya customer likho");
+   else{var rsr=why("Role badal rahe ho",true);if(rsr===null)return;
+    var rr2=await sb.rpc("set_staff",{p_phone:sp.phone,p_role:nr,p_name:"",p_reason:rsr});
+    if(rr2.error)alert(rr2.error.message);else{toast("Role updated");await loadStaff()}}}}
+ else if(a==="sname"){
+  var sp2=S.staff.find(function(x){return x.id===id}),nn=prompt("Naam",sp2.full_name||"");
+  if(nn!==null&&nn.trim()){var rr3=await sb.rpc("set_staff",{p_phone:sp2.phone,p_role:sp2.role,p_name:nn.trim(),p_reason:"naam update"});
+   if(rr3.error)alert(rr3.error.message);else{toast("Naam save");await loadStaff()}}}
+ else if(a==="sinv"){
+  if(!confirm("Is pending invite ko hatana hai?"))return;
+  var rd=await sb.from("staff_invites").delete().eq("phone",id);
+  if(rd.error)alert(rd.error.message);else{await audit("staff_invited","profiles",id,{phone:id,to:"removed",reason:"invite removed"});await loadStaff()}}
+ else if(a==="sforce"){
+  var nf=!S.cfg.force,rf=why(nf?"Store band kar rahe ho":"Store khol rahe ho",true);if(rf===null)return;
+  var rsf=await sb.from("settings").upsert({key:"force_closed",value:nf});
+  if(rsf.error)alert(rsf.error.message);else{await audit("store_setting","settings","force_closed",{force_closed:nf,reason:rf});toast(nf?"Store band":"Store chalu");await loadCfg()}}
+ else if(a==="shsave"){
+  var rh=why("Store timing badal rahe ho",true);if(rh===null)return;
+  var hrows=S.cfg.hours.map(function(h){return {day:h.day,is_open:h.is_open,opens:String(h.opens).slice(0,5),closes:String(h.closes).slice(0,5)}});
+  var rsh=await sb.from("store_hours").upsert(hrows);
+  if(rsh.error)alert(rsh.error.message);else{await audit("store_hours","store_hours","all",{hours:hrows,reason:rh});toast("Timing save");await loadCfg()}}
+ else if(a==="slow"){
+  var lv=parseInt(document.getElementById("lowv").value,10);if(!(lv>=0)){alert("Number daalo");return}
+  var rl=why("Low stock limit badal rahe ho",true);if(rl===null)return;
+  var rsl=await sb.from("settings").upsert({key:"low_stock_threshold",value:lv});
+  if(rsl.error)alert(rsl.error.message);else{await audit("low_stock","settings","low_stock_threshold",{to:lv,reason:rl});S.cfg.low=lv;toast("Save ho gaya")}}
  else if(a==="vis"){
-  var v3=S.inv.find(function(x){return x.id==id});
+  var v3=S.inv.find(function(x){return x.id==id});var rv=why(v3.active?"Hide kar rahe ho":"Show kar rahe ho",true);if(rv===null)return;
   var r6=await sb.from("variants").update({active:!v3.active}).eq("id",id);
-  if(r6.error)alert(r6.error.message);else{await audit("visibility","variants",id,{active:!v3.active});await loadInv()}}
+  if(r6.error)alert(r6.error.message);else{await audit("visibility","variants",id,{active:!v3.active,reason:rv});await loadInv()}}
  render();window.scrollTo(0,y)});
 document.addEventListener("input",function(e){
  var i=e.target.id;
@@ -248,10 +355,14 @@ document.addEventListener("input",function(e){
  else if(i==="otp")S.otp=e.target.value.replace(/\D/g,"");
  else if(i==="q"){S.q=e.target.value;var pos=e.target.selectionStart;render();var el=document.getElementById("q");if(el){el.focus();el.setSelectionRange(pos,pos)}}
  else if(e.target.dataset.bulk){S.bulk.vals[e.target.dataset.bulk]=e.target.value}
- else if(e.target.dataset.bi!=null&&e.target.dataset.f==="q"){S.bill.rows[+e.target.dataset.bi].q=e.target.value}});
+ else if(e.target.dataset.bi!=null&&e.target.dataset.f==="q"){S.bill.rows[+e.target.dataset.bi].q=e.target.value}
+ else if(e.target.dataset.sf){var sv=e.target.value;if(e.target.dataset.sf==="phone")sv=sv.replace(/\D/g,"");S.sf[e.target.dataset.sf]=sv}
+ else if(e.target.dataset.af==="q"){S.af.q=e.target.value;var ps=e.target.selectionStart;render();var ea=document.getElementById("aq");if(ea){ea.focus();ea.setSelectionRange(ps,ps)}}});
 document.addEventListener("change",function(e){var t=e.target;
  if(t.id==="billfile"&&t.files&&t.files[0])processBill(t.files[0]);
- else if(t.dataset&&t.dataset.bi!=null&&t.dataset.f==="v")S.bill.rows[+t.dataset.bi].v=t.value});
+ else if(t.dataset&&t.dataset.bi!=null&&t.dataset.f==="v")S.bill.rows[+t.dataset.bi].v=t.value;
+ else if(t.dataset&&t.dataset.sh!=null){var hh=S.cfg.hours.find(function(x){return String(x.day)===t.dataset.sh});if(hh){if(t.dataset.f==="open")hh.is_open=t.checked;else hh[t.dataset.f]=t.value}}
+ else if(t.dataset&&t.dataset.af&&t.dataset.af!=="q"){S.af[t.dataset.af]=t.value;render()}});
 setInterval(function(){if(S.user&&S.role&&S.role!=="customer"&&S.view==="orders"&&!document.hidden){loadOrders().then(render)}},20000);
 render();whoami();
 </script></body></html>
