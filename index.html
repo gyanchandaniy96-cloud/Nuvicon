@@ -39,7 +39,7 @@ nav button.on{color:var(--ink);box-shadow:inset 0 3px 0 var(--acc)}
 var U="https://ptbaxvqvwhgowflxzqmh.supabase.co",K="sb_publishable_QeRuu6oa6UKMuPTaIjgLcg_BuX-n2dI";
 var sb=window.supabase.createClient(U,K);
 var FLOW=["placed","staged","picked_up","in_transit","delivered"],LBL={placed:"Placed",staged:"Staged",picked_up:"Picked up",in_transit:"In transit",delivered:"Delivered",cancelled:"Cancelled"};
-var S={user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",cfg:{hours:[],force:false,low:20},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
+var S={user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",partners:[],vehicles:[],rates:[],zones:[],pf:{name:"",phone:""},cfg:{hours:[],force:false,low:20},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
 function esc(t){return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}
 function fmt(n){return "₹"+Math.round(Number(n)).toLocaleString("en-IN")}
 function toast(m){var t=document.getElementById("toast");t.innerHTML='<div class="toast">'+esc(m)+'</div>';setTimeout(function(){t.innerHTML=""},2500)}
@@ -54,12 +54,12 @@ async function whoami(){
  if(S.role!=="customer"){await loadAll()}
  render()}
 async function loadOrders(){
- var r=await sb.from("orders").select("id,order_no,total,subtotal,gst_total,status,pay_status,pay_method,address,created_at,profiles(phone,full_name),zones(name),order_items(product_name,variant_label,qty,unit_price)").order("created_at",{ascending:false}).limit(200);
+ var r=await sb.from("orders").select("id,order_no,total,subtotal,gst_total,status,pay_status,pay_method,address,created_at,profiles(phone,full_name),zones(name),order_items(product_name,variant_label,qty,unit_price),partner_id,vehicle_id,partner_fee,cod_collected,partners(name,phone),vehicles(reg_no)").order("created_at",{ascending:false}).limit(200);
  if(r.error){S.loadErr=r.error.message}else{S.orders=r.data;S.loadErr=""}}
 async function loadInv(){
  var r=await sb.from("variants").select("id,label,price,active,product_id,products(brand,name,gst_percent,category),inventory(total,reserved)").order("product_id").order("id");
  if(r.error){S.loadErr=r.error.message}else{S.inv=r.data.map(function(v){v.inv=Array.isArray(v.inventory)?v.inventory[0]:v.inventory;return v})}}
-async function loadAll(){await Promise.all([loadOrders(),loadInv(),loadCfg()])}
+async function loadAll(){await Promise.all([loadOrders(),loadInv(),loadCfg(),loadPartners()])}
 function ordersV(){
  var act=S.orders.filter(function(o){return o.status!=="delivered"&&o.status!=="cancelled"});
  var today=new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Kolkata"});
@@ -76,7 +76,7 @@ function orderCard(o){
  var c=o.profiles||{};
  return '<div class="card"><div class="flex" data-a="tog" data-id="'+o.id+'" style="cursor:pointer"><div><b>#'+esc(o.order_no)+'</b> <span class="pill '+o.status+'">'+LBL[o.status]+'</span><br><small>'+esc(c.full_name||c.phone||"Customer")+', '+esc(o.zones&&o.zones.name)+', '+dt(o.created_at)+'</small></div><b>'+fmt(o.total)+'</b></div>'+
  (op?'<div class="items">'+o.order_items.map(function(l){return esc(l.qty)+' × '+esc(l.product_name)+' ('+esc(l.variant_label)+') '+fmt(l.unit_price*l.qty)}).join("<br>")+'<br><small>Subtotal '+fmt(o.subtotal)+' + GST '+fmt(o.gst_total)+'</small></div>'+
- '<div><small>Phone: <a href="tel:+'+esc(c.phone)+'">'+esc(c.phone)+'</a><br>Address: '+esc(o.address||"-")+'<br>Payment: '+esc(o.pay_method==="on_delivery"?"On delivery":"Online")+', '+esc(o.pay_status)+'</small></div>':'')+
+ '<div><small>Phone: <a href="tel:+'+esc(c.phone)+'">'+esc(c.phone)+'</a><br>Address: '+esc(o.address||"-")+'<br>Payment: '+esc(o.pay_method==="on_delivery"?"On delivery":"Online")+', '+esc(o.pay_status)+(o.cod_collected!=null?', collected '+fmt(o.cod_collected):'')+'<br>Partner: '+esc(o.partners?o.partners.name+" (+"+o.partners.phone+")"+(o.vehicles?", "+o.vehicles.reg_no:"")+", fee "+fmt(o.partner_fee||0):"abhi assign nahi")+'</small>'+(o.status!=="delivered"&&o.status!=="cancelled"?'<br><button class="btn ghost sm" data-a="asg" data-id="'+o.id+'" style="margin-top:6px">'+(o.partners?"Partner badlo":"Partner assign karo")+'</button>':'')+'</div>':'')+
  (nx||(o.status!=="delivered"&&o.status!=="cancelled")?'<div class="flex" style="margin-top:10px">'+(nx?'<button class="btn" data-a="st" data-id="'+o.id+'" data-s="'+nx+'">Mark '+LBL[nx]+'</button>':'<span></span>')+(o.status!=="delivered"&&o.status!=="cancelled"?'<button class="btn bad sm" data-a="st" data-id="'+o.id+'" data-s="cancelled">Cancel</button>':'')+'</div>':'')+'</div>'}
 
 function loadScript(u){return new Promise(function(res,rej){var t=document.createElement("script");t.src=u;t.onload=res;t.onerror=function(){rej(new Error("Load nahi hua: "+u))};document.head.appendChild(t)})}
@@ -154,7 +154,7 @@ function billV(){
   '<div class="flex" style="margin-top:8px"><button class="btn ghost" data-a="baddrow">+ Row</button><button class="btn" data-a="bsave">Stock mein jodo</button></div>':'')}
 
 function why(msg,req){var r=prompt(msg+"\nKaaran likho"+(req?" (zaroori)":" (optional)"));if(r===null)return null;r=r.trim();if(req&&!r){alert("Kaaran zaroori hai");return null}return r}
-var ALBL={price_change:"Price change",gst_change:"GST change",stock_received:"Stock received",bulk_stock:"Bulk stock",bill_stock:"Bill stock",visibility:"Show / Hide",order_status:"Order status",order_note:"Order note",staff_role:"Staff role",staff_invited:"Staff invited",store_hours:"Store timing",store_setting:"Store setting",low_stock:"Low stock limit"};
+var ALBL={price_change:"Price change",gst_change:"GST change",stock_received:"Stock received",bulk_stock:"Bulk stock",bill_stock:"Bill stock",visibility:"Show / Hide",order_status:"Order status",order_note:"Order note",staff_role:"Staff role",staff_invited:"Staff invited",partner_assigned:"Partner assigned",partner_added:"Partner added",partner_status:"Partner status",vehicle_added:"Vehicle added",vehicle_status:"Vehicle status",rate_card:"Rate card",store_hours:"Store timing",store_setting:"Store setting",low_stock:"Low stock limit"};
 var DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 async function loadCfg(){
  var h=await sb.from("store_hours").select("day,is_open,opens,closes").order("day");
@@ -189,11 +189,17 @@ function sumry(a){var d=a.details||{};
  case"staff_role":return d.from+" → "+d.to;
  case"staff_invited":return "Invited as "+d.to;
  case"order_note":return "Cancel";
+ case"partner_assigned":return (d.partner||"")+", fee "+fmt(d.fee||0);
+ case"partner_added":return d.name||"";
+ case"partner_status":return (d.name||"")+" → "+d.to;
+ case"vehicle_added":return (d.reg||"")+" ("+(d.partner||"")+")";
+ case"vehicle_status":return (d.reg||"")+": "+(d.active?"Chalu":"Band");
+ case"rate_card":return (d.zone||"")+": "+(d.from==null?"-":fmt(d.from))+" → "+fmt(d.to);
  default:var c=Object.assign({},d);delete c.reason;var t=JSON.stringify(c);return t.length>90?t.slice(0,90)+"…":t}}
 function backBtn(){return '<button class="btn ghost sm" data-a="go" data-id="more">&larr; More</button>'}
 function moreV(){
  var it=function(id,t,sub){return '<div class="card flex" data-a="go" data-id="'+id+'" style="cursor:pointer"><div><b>'+t+'</b><br><small>'+sub+'</small></div><span>&rsaquo;</span></div>'};
- return '<h1>More</h1>'+(S.role==="admin"?it("staff","Staff","Team jodo, role badlo")+it("settings","Settings","Store timing, band/chalu, low stock limit"):"")+it("audit","Audit log","Har badlav ka record")+'<div class="card flex" data-a="out" style="cursor:pointer"><b>Log out</b><span>&rsaquo;</span></div>'}
+ return '<h1>More</h1>'+(S.role==="admin"?it("staff","Staff","Team jodo, role badlo")+it("settings","Settings","Store timing, band/chalu, low stock limit")+it("partners","Partners","Transport wale, gaadiyan, rate card"):"")+it("audit","Audit log","Har badlav ka record")+'<div class="card flex" data-a="out" style="cursor:pointer"><b>Log out</b><span>&rsaquo;</span></div>'}
 function auditV(){
  var f=S.af,q=f.q.toLowerCase(),users={},acts={};
  S.audit.forEach(function(a){if(a.user_id)users[a.user_id]=1;acts[a.action]=1});
@@ -222,10 +228,32 @@ function settingsV(){
  '<div class="card flex" style="margin-top:8px"><div><b>Store '+(c.force?'abhi band hai':'chalu hai')+'</b><br><small>Band karte hi naye orders ruk jayenge.</small></div><button class="btn '+(c.force?'':'bad ')+'sm" data-a="sforce">'+(c.force?'Kholo':'Band karo')+'</button></div>'+
  '<div class="card"><b>Store timing</b>'+c.hours.map(function(h){return '<div class="flex" style="margin:8px 0"><span style="width:78px">'+DAYS[h.day].slice(0,3)+'</span><label><input type="checkbox" data-sh="'+h.day+'" data-f="open"'+(h.is_open?' checked':'')+' style="width:auto;margin:0"> Open</label><input type="time" data-sh="'+h.day+'" data-f="opens" value="'+esc(String(h.opens).slice(0,5))+'" style="width:105px;margin:0"><input type="time" data-sh="'+h.day+'" data-f="closes" value="'+esc(String(h.closes).slice(0,5))+'" style="width:105px;margin:0"></div>'}).join("")+'<button class="btn" data-a="shsave">Timing save karo</button></div>'+
  '<div class="card"><b>Low stock limit</b><br><small>Itne ya kam bache to "Low" dikhega.</small><input type="number" inputmode="numeric" id="lowv" value="'+c.low+'" style="margin-top:8px"><button class="btn" data-a="slow">Save</button></div>'}
+
+async function loadPartners(){
+ var a=await sb.from("partners").select("id,name,phone,status,active").order("id");
+ var b=await sb.from("vehicles").select("id,partner_id,reg_no,vtype,insurance_expires,active").order("id");
+ var c=await sb.from("rate_card").select("zone_id,fee");
+ var d=await sb.from("zones").select("id,name").order("name");
+ S.partners=a.data||[];S.vehicles=b.data||[];S.rates=c.data||[];S.zones=d.data||[];
+ if(a.error&&S.view==="partners")S.loadErr=a.error.message}
+function partnersV(){
+ var pf=S.pf,today=new Date().toISOString().slice(0,10);
+ var rate=function(z){var r=S.rates.find(function(x){return x.zone_id===z});return r?Number(r.fee):null};
+ return '<h1>Partners</h1>'+backBtn()+
+ '<div class="card" style="margin-top:8px"><b>Naya partner jodo</b><input data-pf="name" placeholder="Transport ya driver ka naam" value="'+esc(pf.name)+'" style="margin-top:8px"><input data-pf="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" value="'+esc(pf.phone)+'"><button class="btn" data-a="padd">Jodo</button><br><small>Jodne ke baad "Approve" dabao. Partner isi number se OTP login karega.</small></div>'+
+ (S.loadErr?'<div class="err">'+esc(S.loadErr)+'</div>':'')+
+ S.partners.map(function(p){
+  var vs=S.vehicles.filter(function(v){return v.partner_id===p.id});
+  return '<div class="card"><div class="flex"><div><b>'+esc(p.name)+'</b> <span class="pill '+(p.status==="approved"?'ok':p.status==="pending"?'low':'out')+'">'+esc(p.status)+'</span><br><small>+'+esc(p.phone)+'</small></div><div>'+
+   (p.status!=="approved"?'<button class="btn sm" data-a="pst" data-id="'+p.id+'" data-s="approved">Approve</button>':'<button class="btn bad sm" data-a="pst" data-id="'+p.id+'" data-s="suspended">Suspend</button>')+'</div></div>'+
+   vs.map(function(v){var exp=v.insurance_expires&&v.insurance_expires<today;return '<div class="flex" style="margin-top:8px"><div><b>'+esc(v.reg_no)+'</b> <small>'+esc(v.vtype||"")+(v.insurance_expires?', insurance '+esc(v.insurance_expires):'')+'</small> '+(exp?'<span class="pill out">Insurance expired</span>':'')+(v.active?'':'<span class="pill out">Band</span>')+'</div><button class="btn ghost sm" data-a="vst" data-id="'+v.id+'">'+(v.active?'Band karo':'Chalu karo')+'</button></div>'}).join("")+
+   '<button class="btn ghost sm" data-a="vadd" data-id="'+p.id+'" style="margin-top:8px">+ Gaadi jodo</button></div>'}).join("")+
+ '<h1 style="font-size:16px">Rate card (partner ko milne wala fee)</h1><small>Har zone ke liye ek order ka fee. Order assign karte waqt yahi fee lagta hai.</small><div style="margin-top:8px"></div>'+
+ S.zones.map(function(z){var r=rate(z.id);return '<div class="card flex"><div><b>'+esc(z.name)+'</b><br><small>'+(r==null?'Fee set nahi':fmt(r))+'</small></div><button class="btn sm" data-a="rate" data-id="'+z.id+'">'+(r==null?'Set':'Badlo')+'</button></div>'}).join("")}
 function viewHtml(){var v=S.view;
- if((v==="staff"||v==="settings")&&S.role!=="admin")v="more";
- return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():catV()}
-function navOn(t){var v=S.view;return v===t||(t==="stock"&&(v==="bulk"||v==="bill"))||(t==="more"&&(v==="staff"||v==="settings"||v==="audit"))}
+ if((v==="staff"||v==="settings"||v==="partners")&&S.role!=="admin")v="more";
+ return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():v==="partners"?partnersV():catV()}
+function navOn(t){var v=S.view;return v===t||(t==="stock"&&(v==="bulk"||v==="bill"))||(t==="more"&&(v==="staff"||v==="settings"||v==="audit"||v==="partners"))}
 function stk(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<1?["out","Out"]:a<=S.cfg.low?["low","Low"]:["ok","OK"]}
 function stockV(){
  var s=S.q.toLowerCase(),vs=S.inv.filter(function(v){return (v.products.brand+" "+v.products.name+" "+v.label).toLowerCase().indexOf(s)>-1});
@@ -252,7 +280,7 @@ function render(){
 document.addEventListener("click",async function(e){
  var b=e.target.closest("[data-a]");if(!b||b.disabled)return;
  var a=b.dataset.a,id=b.dataset.id,y=window.scrollY;S.err="";
- if(a==="go"){S.view=id;S.q="";S.loadErr="";if(id==="staff")await loadStaff();else if(id==="audit")await loadAudit();else if(id==="settings")await loadCfg()}
+ if(a==="go"){S.view=id;S.q="";S.loadErr="";if(id==="staff")await loadStaff();else if(id==="audit")await loadAudit();else if(id==="settings")await loadCfg();else if(id==="partners")await loadPartners()}
  else if(a==="f")S.f=id;
  else if(a==="tog")S.open[id]=!S.open[id];
  else if(a==="back"){S.step="phone";S.otp=""}
@@ -344,6 +372,42 @@ document.addEventListener("click",async function(e){
   var rl=why("Low stock limit badal rahe ho",true);if(rl===null)return;
   var rsl=await sb.from("settings").upsert({key:"low_stock_threshold",value:lv});
   if(rsl.error)alert(rsl.error.message);else{await audit("low_stock","settings","low_stock_threshold",{to:lv,reason:rl});S.cfg.low=lv;toast("Save ho gaya")}}
+ else if(a==="asg"){
+  var asP=S.partners.filter(function(x){return x.status==="approved"&&x.active});
+  if(!asP.length){alert("Koi approved partner nahi hai. More → Partners mein jodo aur approve karo.");return}
+  var asK=prompt("Partner chuno (number likho):\n"+asP.map(function(x,i){return (i+1)+". "+x.name}).join("\n"));
+  if(asK===null)return;var asX=asP[parseInt(asK,10)-1];if(!asX){alert("Sahi number likho");return}
+  var asV=S.vehicles.filter(function(x){return x.partner_id===asX.id&&x.active}),asVid=null;
+  if(asV.length){var asVk=prompt("Gaadi chuno (number likho, skip ke liye khali chhodo):\n"+asV.map(function(x,i){return (i+1)+". "+x.reg_no}).join("\n"));
+   if(asVk===null)return;if(asVk.trim()){var asVv=asV[parseInt(asVk,10)-1];if(!asVv){alert("Sahi number likho");return}asVid=asVv.id}}
+  var asR=await sb.rpc("assign_partner",{p_order:+id,p_partner:asX.id,p_vehicle:asVid,p_reason:"panel se assign"});
+  if(asR.error)alert(asR.error.message);else{toast("Partner assign ho gaya");await loadOrders()}}
+ else if(a==="padd"){
+  var pf=S.pf;if(!pf.name.trim()||!/^[6-9][0-9]{9}$/.test(pf.phone)){alert("Naam aur 10-digit sahi number daalo");return}
+  var pr1=await sb.from("partners").insert({name:pf.name.trim(),phone:"91"+pf.phone,status:"pending"}).select("id").single();
+  if(pr1.error)alert(pr1.error.message.indexOf("partners_phone_uq")>-1?"Yeh number pehle se jura hai":pr1.error.message);
+  else{await audit("partner_added","partners",pr1.data.id,{name:pf.name.trim(),reason:"added from panel"});S.pf={name:"",phone:""};toast("Partner jud gaya. Ab Approve karo");await loadPartners()}}
+ else if(a==="pst"){
+  var ps=b.dataset.s,pp1=S.partners.find(function(x){return x.id==id}),pr2=why((ps==="approved"?"Approve":"Suspend")+" kar rahe ho: "+pp1.name,true);if(pr2===null)return;
+  var pr3=await sb.from("partners").update({status:ps}).eq("id",id);
+  if(pr3.error)alert(pr3.error.message);else{await audit("partner_status","partners",id,{name:pp1.name,to:ps,reason:pr2});toast("Updated");await loadPartners()}}
+ else if(a==="vadd"){
+  var vp=S.partners.find(function(x){return x.id==id}),vr=prompt("Gaadi ka number (jaise MH31AB1234)");if(!vr||!vr.trim())return;
+  var vt=prompt("Gaadi ka type (jaise Tempo, Truck, Pickup)","Tempo");if(vt===null)return;
+  var vi=prompt("Insurance khatam hone ki date (YYYY-MM-DD), pata na ho to khali chhodo","");if(vi===null)return;
+  if(vi.trim()&&!/^\d{4}-\d{2}-\d{2}$/.test(vi.trim())){alert("Date aise likho: 2027-03-31");return}
+  var vo=await sb.from("vehicles").insert({partner_id:+id,reg_no:vr.trim().toUpperCase().replace(/\s+/g,""),vtype:vt.trim(),insurance_expires:vi.trim()||null}).select("id").single();
+  if(vo.error)alert(vo.error.message);else{await audit("vehicle_added","vehicles",vo.data.id,{reg:vr.trim().toUpperCase(),partner:vp.name,reason:"added from panel"});toast("Gaadi jud gayi");await loadPartners()}}
+ else if(a==="vst"){
+  var vx=S.vehicles.find(function(x){return x.id==id}),vw=why((vx.active?"Gaadi band kar rahe ho ":"Gaadi chalu kar rahe ho ")+vx.reg_no,true);if(vw===null)return;
+  var vy=await sb.from("vehicles").update({active:!vx.active}).eq("id",id);
+  if(vy.error)alert(vy.error.message);else{await audit("vehicle_status","vehicles",id,{reg:vx.reg_no,active:!vx.active,reason:vw});await loadPartners()}}
+ else if(a==="rate"){
+  var rz=S.zones.find(function(x){return x.id==id}),ro=S.rates.find(function(x){return x.zone_id==id}),rf=prompt("Fee kitni (₹) "+rz.name+" ke ek order ke liye?",ro?ro.fee:"");
+  rf=parseFloat(rf);
+  if(rf>=0){var rw=why("Rate card badal rahe ho",true);if(rw===null)return;
+   var rr9=await sb.from("rate_card").upsert({zone_id:+id,fee:rf});
+   if(rr9.error)alert(rr9.error.message);else{await audit("rate_card","rate_card",id,{zone:rz.name,from:ro?Number(ro.fee):null,to:rf,reason:rw});toast("Fee save");await loadPartners()}}}
  else if(a==="vis"){
   var v3=S.inv.find(function(x){return x.id==id});var rv=why(v3.active?"Hide kar rahe ho":"Show kar rahe ho",true);if(rv===null)return;
   var r6=await sb.from("variants").update({active:!v3.active}).eq("id",id);
@@ -356,6 +420,7 @@ document.addEventListener("input",function(e){
  else if(i==="q"){S.q=e.target.value;var pos=e.target.selectionStart;render();var el=document.getElementById("q");if(el){el.focus();el.setSelectionRange(pos,pos)}}
  else if(e.target.dataset.bulk){S.bulk.vals[e.target.dataset.bulk]=e.target.value}
  else if(e.target.dataset.bi!=null&&e.target.dataset.f==="q"){S.bill.rows[+e.target.dataset.bi].q=e.target.value}
+ else if(e.target.dataset.pf){var pv=e.target.value;if(e.target.dataset.pf==="phone")pv=pv.replace(/\D/g,"");S.pf[e.target.dataset.pf]=pv}
  else if(e.target.dataset.sf){var sv=e.target.value;if(e.target.dataset.sf==="phone")sv=sv.replace(/\D/g,"");S.sf[e.target.dataset.sf]=sv}
  else if(e.target.dataset.af==="q"){S.af.q=e.target.value;var ps=e.target.selectionStart;render();var ea=document.getElementById("aq");if(ea){ea.focus();ea.setSelectionRange(ps,ps)}}});
 document.addEventListener("change",function(e){var t=e.target;
