@@ -39,7 +39,7 @@ nav button.on{color:var(--ink);box-shadow:inset 0 3px 0 var(--acc)}
 var U="https://ptbaxvqvwhgowflxzqmh.supabase.co",K="sb_publishable_QeRuu6oa6UKMuPTaIjgLcg_BuX-n2dI";
 var sb=window.supabase.createClient(U,K);
 var FLOW=["placed","staged","picked_up","in_transit","delivered"],LBL={placed:"Placed",staged:"Staged",picked_up:"Picked up",in_transit:"In transit",delivered:"Delivered",cancelled:"Cancelled"};
-var S={credit:[],cf:{phone:"",sd:""},user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",partners:[],vehicles:[],rates:[],zones:[],pf:{name:"",phone:""},zonef:"",cfg:{onl:false,rzk:"",hours:[],force:false,low:20,city:"Pusad",gkey:"",godown:null,rad:30,dfee:0},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
+var S={nf:{brand:"",name:"",cat:"",gst:"18",label:"",price:"",cost:""},pr:null,pper:"month",exps:[],costs:{},ef:{cat:"Salary",amt:"",note:""},credit:[],cf:{phone:"",sd:""},user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",partners:[],vehicles:[],rates:[],zones:[],pf:{name:"",phone:""},zonef:"",cfg:{onl:false,rzk:"",hours:[],force:false,low:20,city:"Pusad",gkey:"",godown:null,rad:30,dfee:0},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
 function esc(t){return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}
 function fmt(n){return "₹"+Math.round(Number(n)).toLocaleString("en-IN")}
 function toast(m){var t=document.getElementById("toast");t.innerHTML='<div class="toast">'+esc(m)+'</div>';setTimeout(function(){t.innerHTML=""},2500)}
@@ -154,7 +154,7 @@ function billV(){
   '<div class="flex" style="margin-top:8px"><button class="btn ghost" data-a="baddrow">+ Row</button><button class="btn" data-a="bsave">Add to stock</button></div>':'')}
 
 function why(msg,req){var r=prompt(msg+"\nEnter a reason"+(req?" (zaroori)":" (optional)"));if(r===null)return null;r=r.trim();if(req&&!r){alert("A reason is required");return null}return r}
-var ALBL={credit_set:"Credit set",credit_payment:"Credit payment",payment_received:"Online payment",payment_after_cancel:"Payment after cancel",price_change:"Price change",gst_change:"GST change",stock_received:"Stock received",bulk_stock:"Bulk stock",bill_stock:"Bill stock",visibility:"Show / Hide",order_status:"Order status",order_note:"Order note",staff_role:"Staff role",staff_invited:"Staff invited",partner_assigned:"Partner assigned",partner_added:"Partner added",partner_status:"Partner status",vehicle_added:"Vehicle added",vehicle_status:"Vehicle status",rate_card:"Rate card",store_hours:"Store timing",store_setting:"Store setting",zone_change:"Zone",low_stock:"Low stock limit"};
+var ALBL={credit_set:"Credit set",credit_payment:"Credit payment",payment_received:"Online payment",payment_after_cancel:"Payment after cancel",price_change:"Price change",gst_change:"GST change",stock_received:"Stock received",bulk_stock:"Bulk stock",bill_stock:"Bill stock",visibility:"Show / Hide",order_status:"Order status",order_note:"Order note",staff_role:"Staff role",staff_invited:"Staff invited",partner_assigned:"Partner assigned",partner_added:"Partner added",partner_status:"Partner status",vehicle_added:"Vehicle added",vehicle_status:"Vehicle status",rate_card:"Rate card",store_hours:"Store timing",store_setting:"Store setting",zone_change:"Zone",low_stock:"Low stock limit",cost_price:"Cost price",expense_added:"Expense added",expense_deleted:"Expense deleted",item_added:"Item added",catalog_reset:"Catalog cleared"};
 var DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 async function loadCfg(){
  var h=await sb.from("store_hours").select("day,is_open,opens,closes").order("day");
@@ -180,6 +180,9 @@ function entLabel(a){var d=a.details||{},id=a.entity_id;
 function sumry(a){var d=a.details||{};
  switch(a.action){
  case"price_change":return fmt(d.from)+" → "+fmt(d.to);
+ case"item_added":return (d.name||"")+" "+(d.label||"")+" at "+fmt(d.price);
+ case"cost_price":return (d.from==null?"-":fmt(d.from))+" → "+fmt(d.to);
+ case"expense_added":case"expense_deleted":return (d.category||"")+" "+fmt(d.amount)+(d.note?" ("+d.note+")":"");
  case"gst_change":return d.from+"% → "+d.to+"%";
  case"stock_received":return "+"+d.qty+" (total "+d.total+")";
  case"bulk_stock":return (d.mode==="set"?"Exact count":"Add")+", "+(d.items||[]).length+" items";
@@ -200,7 +203,7 @@ function sumry(a){var d=a.details||{};
 function backBtn(){return '<button class="btn ghost sm" data-a="go" data-id="more">&larr; More</button>'}
 function moreV(){
  var it=function(id,t,sub){return '<div class="card flex" data-a="go" data-id="'+id+'" style="cursor:pointer"><div><b>'+t+'</b><br><small>'+sub+'</small></div><span>&rsaquo;</span></div>'};
- return '<h1>More</h1>'+(S.role==="admin"?it("staff","Staff","Add team members, change roles")+it("settings","Settings","Store timing, open/close, low stock limit")+it("partners","Partners","Transporters, vehicles, rate card")+it("credit","Credit customers","Security deposits and outstanding balances"):"")+it("audit","Audit log","A record of every change")+'<div class="card flex" data-a="out" style="cursor:pointer"><b>Log out</b><span>&rsaquo;</span></div>'}
+ return '<h1>More</h1>'+(S.role==="admin"?it("staff","Staff","Add team members, change roles")+it("settings","Settings","Store timing, open/close, low stock limit")+it("partners","Partners","Transporters, vehicles, rate card")+it("credit","Credit customers","Security deposits and outstanding balances")+it("profit","Profit","Sales, costs, expenses and net profit (admin only)"):"")+it("audit","Audit log","A record of every change")+'<div class="card flex" data-a="out" style="cursor:pointer"><b>Log out</b><span>&rsaquo;</span></div>'}
 function auditV(){
  var f=S.af,q=f.q.toLowerCase(),users={},acts={};
  S.audit.forEach(function(a){if(a.user_id)users[a.user_id]=1;acts[a.action]=1});
@@ -256,6 +259,57 @@ function creditV(){
   return '<div class="card"><div class="flex"><div><b>'+esc(c.name||("+"+c.phone))+'</b> <span class="pill">'+(c.enabled?'Credit on':'Off')+'</span><br><small>+'+esc(c.phone)+'</small></div></div>'+
   '<div class="stat" style="margin:8px 0"><div><small>SD / limit</small><b>'+fmt(c.sd)+'</b></div><div><small>Outstanding</small><b'+(c.used>0?' style="color:#b3392f"':'')+'>'+fmt(c.used)+'</b></div><div><small>Available limit</small><b>'+fmt(c.available)+'</b></div></div>'+
   '<div class="flex"><button class="btn sm" data-a="cpay" data-id="'+esc(c.phone)+'">Payment received</button><button class="btn ghost sm" data-a="csd" data-id="'+esc(c.phone)+'" data-sd="'+c.sd+'" data-en="'+(c.enabled?1:0)+'">Change SD</button><button class="btn ghost sm" data-a="ctog" data-id="'+esc(c.phone)+'" data-sd="'+c.sd+'" data-en="'+(c.enabled?1:0)+'">'+(c.enabled?'Turn off':'Turn on')+'</button></div></div>'}).join(""):'<div class="empty">No credit customers yet.</div>')}
+function dlCsv(name,rows){
+ var q=function(v){v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+ var txt="﻿"+rows.map(function(r){return r.map(q).join(",")}).join("\r\n");
+ var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([txt],{type:"text/csv;charset=utf-8"}));a.download=name;document.body.appendChild(a);a.click();
+ setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},1500)}
+function ist(t){return t?new Date(t).toLocaleString("en-GB",{timeZone:"Asia/Kolkata",hour12:false}).replace(",",""):""}
+function prRange(){
+ var t=new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Kolkata"}),y=+t.slice(0,4),m=+t.slice(5,7)-1,d=+t.slice(8,10);
+ var iso=function(dt){return dt.toISOString().slice(0,10)};
+ if(S.pper==="today")return [t,t];
+ if(S.pper==="week")return [iso(new Date(Date.UTC(y,m,d-6))),t];
+ if(S.pper==="last")return [iso(new Date(Date.UTC(y,m-1,1))),iso(new Date(Date.UTC(y,m,0)))];
+ return [iso(new Date(Date.UTC(y,m,1))),t]}
+async function loadProfit(){
+ var r=prRange();
+ var a=await sb.rpc("profit_report",{p_from:r[0],p_to:r[1]});
+ var e=await sb.from("expenses").select("id,spent_on,category,amount,note").gte("spent_on",r[0]).lte("spent_on",r[1]).order("spent_on",{ascending:false}).order("id",{ascending:false});
+ if(a.error){S.loadErr=a.error.message;S.pr=null}else{S.pr=a.data;S.loadErr=""}
+ S.exps=e.data||[]}
+async function loadCosts(){
+ if(!S.inv.length)await loadInv();
+ var c=await sb.from("variant_costs").select("variant_id,cost");
+ S.costs={};(c.data||[]).forEach(function(x){S.costs[x.variant_id]=Number(x.cost)});
+ if(c.error)S.loadErr=c.error.message}
+var ECATS=["Salary","Rent","Fuel","Electricity","Marketing","Packing","Repairs","Other"];
+function profitV(){
+ var p=S.pr,ef=S.ef,pers=[["today","Today"],["week","Last 7 days"],["month","This month"],["last","Last month"]];
+ var row=function(l,v,b,neg){return '<div class="flex" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>'+l+'</span><'+(b?'b':'span')+(neg?' style="color:#b3392f"':'')+'>'+(neg?'− ':'')+fmt(v)+'</'+(b?'b':'span')+'></div>'};
+ var h='<h1>Profit</h1>'+backBtn()+
+ '<div class="card" style="background:#f6f5f1;margin-top:8px"><small>Only admins can see this page. It counts delivered orders only. Sales are before GST (GST is not your income).</small></div>'+
+ '<div class="chips">'+pers.map(function(x){return '<button class="chip'+(S.pper===x[0]?' on':'')+'" data-a="pper" data-id="'+x[0]+'">'+x[1]+'</button>'}).join("")+'</div>'+
+ (S.loadErr?'<div class="err">'+esc(S.loadErr)+' (Run SQL part 12 in Supabase if you have not.)</div>':'');
+ if(p){
+  var net=Number(p.profit),mg=Number(p.sales)>0?(net/Number(p.sales)*100):0;
+  h+='<div class="card"><div class="flex"><div><small>Net profit</small><br><b style="font-size:26px;color:'+(net<0?'#b3392f':'#2a7a4b')+'">'+(net<0?'− ':'')+fmt(Math.abs(net))+'</b></div><div style="text-align:right"><small>Margin</small><br><b>'+mg.toFixed(1)+'%</b><br><small>'+p.orders+' orders</small></div></div></div>'+
+  '<div class="card">'+row("Sales (before GST)",p.sales,true)+row("Cost of goods",p.cogs,false,true)+row("Gross profit",p.gross,true)+row("Partner delivery fees",p.partner_fees,false,true)+row("Payment gateway fees (est. "+p.gateway_pct+"%)",p.gateway_fee,false,true)+row("Other expenses",p.expenses,false,true)+'</div>'+
+  (Number(p.missing_cost_lines)>0?'<div class="err">'+p.missing_cost_lines+' order lines have no cost price, so profit looks higher than it really is. Set the cost prices below.</div>':'')}
+ h+='<div class="card flex" data-a="go" data-id="costs" style="cursor:pointer"><div><b>Cost prices</b><br><small>What you pay your supplier per item, before GST</small></div><span>&rsaquo;</span></div>'+
+ '<div class="card"><b>Add an expense</b><select data-ef="cat" style="margin-top:8px">'+ECATS.map(function(c){return '<option'+(ef.cat===c?' selected':'')+'>'+c+'</option>'}).join("")+'</select><input data-ef="amt" type="number" inputmode="decimal" placeholder="Amount (₹)" value="'+esc(ef.amt)+'"><input data-ef="note" placeholder="Note (optional)" value="'+esc(ef.note)+'"><button class="btn" data-a="eadd">Add expense</button><br><small>It is counted on today’s date.</small></div>'+'<div class="card"><b>Download for your CA</b><br><small>CSV files for the selected period above. They open in Excel and can be imported into Tally.</small><div class="flex" style="margin-top:8px;gap:8px;flex-wrap:wrap"><button class="btn sm" data-a="xsales">Sales</button><button class="btn sm" data-a="xexp">Expenses</button><button class="btn sm" data-a="xcred">Credit payments</button></div></div>'+
+ '<h1 style="font-size:16px">Expenses in this period</h1>'+
+ (S.exps.length?S.exps.map(function(x){return '<div class="card flex"><div><b>'+esc(x.category)+'</b> '+fmt(x.amount)+'<br><small>'+esc(x.spent_on)+(x.note?', '+esc(x.note):'')+'</small></div><button class="btn bad sm" data-a="edel" data-id="'+x.id+'">Delete</button></div>'}).join(""):'<div class="empty">No expenses in this period.</div>');
+ return h}
+function costsV(){
+ var q=S.q.trim().toLowerCase();
+ var list=S.inv.filter(function(v){return !q||(v.products.brand+" "+v.products.name+" "+v.label).toLowerCase().indexOf(q)>=0});
+ var miss=S.inv.filter(function(v){return S.costs[v.id]==null}).length;
+ return '<h1>Cost prices</h1><button class="btn ghost sm" data-a="go" data-id="profit">&larr; Profit</button>'+
+ '<div class="card" style="background:#f6f5f1;margin-top:8px"><small>Enter what you pay your supplier for one unit, before GST. Customers and staff never see this. '+(miss?miss+' items have no cost yet.':'All items have a cost.')+'</small></div>'+
+ '<input id="q" placeholder="Search product or size" value="'+esc(S.q)+'">'+
+ list.map(function(v){var c=S.costs[v.id],mg=(c!=null&&Number(v.price)>0)?((Number(v.price)-c)/Number(v.price)*100):null;
+  return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b> <small>'+esc(v.label)+'</small><br><small>Selling '+fmt(v.price)+' · Cost '+(c==null?'<span style="color:#b3392f">not set</span>':fmt(c))+(mg!=null?' · Margin '+mg.toFixed(1)+'%':'')+'</small></div><button class="btn sm'+(c==null?'':' ghost')+'" data-a="ccost" data-id="'+v.id+'">'+(c==null?'Set cost':'Change')+'</button></div>'}).join("")}
 function partnersV(){
  var pf=S.pf,today=new Date().toISOString().slice(0,10);
  var rate=function(z){var r=S.rates.find(function(x){return x.zone_id===z});return r?Number(r.fee):null};
@@ -271,9 +325,9 @@ function partnersV(){
  '<div class="card flex" style="margin-top:12px"><div><b>Default fee</b><br><small>For map-pin orders (no zone): '+fmt(S.cfg.dfee)+'</small></div><button class="btn sm" data-a="dfee">Change</button></div><h1 style="font-size:16px">Rate card (fee paid to the partner)</h1><small>Fee per order for each zone. This fee is applied when an order is assigned.</small><div style="margin-top:8px"></div>'+
  S.zones.filter(function(z){return z.active}).map(function(z){var r=rate(z.id);return '<div class="card flex"><div><b>'+esc(z.name)+'</b><br><small>'+(r==null?'Fee not set':fmt(r))+'</small></div><button class="btn sm" data-a="rate" data-id="'+z.id+'">'+(r==null?'Set':'Change')+'</button></div>'}).join("")}
 function viewHtml(){var v=S.view;
- if((v==="staff"||v==="settings"||v==="partners"||v==="credit")&&S.role!=="admin")v="more";
- return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():v==="partners"?partnersV():v==="credit"?creditV():catV()}
-function navOn(t){var v=S.view;return v===t||(t==="stock"&&(v==="bulk"||v==="bill"))||(t==="more"&&(v==="staff"||v==="settings"||v==="audit"||v==="partners"||v==="credit"))}
+ if((v==="staff"||v==="settings"||v==="partners"||v==="credit"||v==="profit"||v==="costs")&&S.role!=="admin")v="more";
+ return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():v==="partners"?partnersV():v==="credit"?creditV():v==="profit"?profitV():v==="costs"?costsV():catV()}
+function navOn(t){var v=S.view;return v===t||(t==="stock"&&(v==="bulk"||v==="bill"))||(t==="more"&&(v==="staff"||v==="settings"||v==="audit"||v==="partners"||v==="credit"||v==="profit"||v==="costs"))}
 function stk(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<1?["out","Out"]:a<=S.cfg.low?["low","Low"]:["ok","OK"]}
 function stockV(){
  var s=S.q.toLowerCase(),vs=S.inv.filter(function(v){return (v.products.brand+" "+v.products.name+" "+v.label).toLowerCase().indexOf(s)>-1});
@@ -281,9 +335,18 @@ function stockV(){
  return '<h1>Inventory</h1><small>'+S.inv.length+' variants, '+low+' low or out</small><div class="flex" style="margin:8px 0"><button class="btn sm" data-a="go" data-id="bulk">Bulk update</button><button class="btn sm" data-a="go" data-id="bill">Upload bill</button></div><input id="q" placeholder="Search product or size" value="'+esc(S.q)+'">'+
  (vs.length?vs.map(function(v){var t=stk(v),i=v.inv||{total:0,reserved:0};
   return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+'</small><br><span class="pill '+t[0]+'">'+t[1]+'</span> <small>Available <b>'+(i.total-i.reserved)+'</b>, total '+i.total+', reserved '+i.reserved+'</small></div><button class="btn sm" data-a="recv" data-id="'+v.id+'">+ Receive</button></div>'}).join(""):'<div class="empty">Nothing matches.</div>')}
+function addItemForm(){
+ var f=S.nf,cats=[];S.inv.forEach(function(v){if(cats.indexOf(v.products.category)<0)cats.push(v.products.category)});
+ ["Cement","Steel","Sand","Bricks","Aggregate","Other"].forEach(function(c){if(cats.map(function(x){return x.toLowerCase()}).indexOf(c.toLowerCase())<0)cats.push(c)});
+ return '<div class="card"><b>Add an item</b><br><small>New items start with stock 0 and stay hidden from customers until stock is added (Inventory → Upload bill). To add another size of an existing item, use the same brand and name.</small>'+
+ '<input data-nf="brand" placeholder="Brand (e.g. Dalmia)" value="'+esc(f.brand)+'" style="margin-top:8px"><input data-nf="name" placeholder="Item name (e.g. DSP Cement)" value="'+esc(f.name)+'">'+
+ '<input data-nf="cat" list="catlist" placeholder="Category (e.g. Cement)" value="'+esc(f.cat)+'"><datalist id="catlist">'+cats.map(function(c){return '<option value="'+esc(c)+'">'}).join("")+'</datalist>'+
+ '<select data-nf="gst">'+["0","5","12","18","28"].map(function(g){return '<option value="'+g+'"'+(f.gst===g?' selected':'')+'>GST '+g+'%</option>'}).join("")+'</select>'+
+ '<input data-nf="label" placeholder="Size / pack (e.g. 50 kg bag)" value="'+esc(f.label)+'"><input data-nf="price" type="number" inputmode="decimal" placeholder="Selling price before GST (₹)" value="'+esc(f.price)+'"><input data-nf="cost" type="number" inputmode="decimal" placeholder="Your cost price before GST (₹, optional)" value="'+esc(f.cost)+'">'+
+ '<button class="btn" data-a="nadd">Add item</button></div>'}
 function catV(){
  var s=S.q.toLowerCase(),vs=S.inv.filter(function(v){return (v.products.brand+" "+v.products.name+" "+v.label).toLowerCase().indexOf(s)>-1});
- return '<h1>Catalog</h1><input id="q" placeholder="Search product or size" value="'+esc(S.q)+'">'+
+ return '<h1>Catalog</h1>'+(S.role==="admin"?addItemForm():'')+(S.inv.length?'':'<div class="empty">No items yet. Add your first item above.</div>')+'<input id="q" placeholder="Search product or size" value="'+esc(S.q)+'">'+
  vs.map(function(v){return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', GST '+Number(v.products.gst_percent)+'%</small><br><b>'+fmt(v.price)+'</b> '+(v.active?'':'<span class="pill out">Hidden</span>')+'</div>'+(S.role==="admin"?'<div><button class="btn sm" data-a="price" data-id="'+v.id+'">Price</button> <button class="btn sm" data-a="gst" data-id="'+v.id+'">GST</button> <button class="btn ghost sm" data-a="vis" data-id="'+v.id+'">'+(v.active?'Hide':'Show')+'</button></div>':"")+'</div>'}).join("")}
 function loginV(){
  return '<main><h1 style="margin-top:60px">Nuvicon Ops</h1><p class="mut">Staff login</p>'+
@@ -300,7 +363,7 @@ function render(){
 document.addEventListener("click",async function(e){
  var b=e.target.closest("[data-a]");if(!b||b.disabled)return;
  var a=b.dataset.a,id=b.dataset.id,y=window.scrollY;S.err="";
- if(a==="go"){S.view=id;S.q="";S.loadErr="";if(id==="staff")await loadStaff();else if(id==="audit")await loadAudit();else if(id==="settings")await loadCfg();else if(id==="partners")await loadPartners();else if(id==="credit")await loadCredit()}
+ if(a==="go"){S.view=id;S.q="";S.loadErr="";if(id==="staff")await loadStaff();else if(id==="audit")await loadAudit();else if(id==="settings")await loadCfg();else if(id==="partners")await loadPartners();else if(id==="credit")await loadCredit();else if(id==="profit")await loadProfit();else if(id==="costs")await loadCosts()}
  else if(a==="f")S.f=id;
  else if(a==="tog")S.open[id]=!S.open[id];
  else if(a==="back"){S.step="phone";S.otp=""}
@@ -403,6 +466,53 @@ document.addEventListener("click",async function(e){
   var nt=prompt("Note (cash / UPI / cheque), can be left empty","cash");if(nt===null)return;
   var cr3=await sb.rpc("record_credit_payment",{p_phone:id,p_amount:am,p_note:nt});
   if(cr3.error)alert(cr3.error.message);else{toast("Payment recorded");await loadCredit()}}
+ else if(a==="xsales"||a==="xexp"||a==="xcred"){
+  var rg=prRange(),nm=rg[0]+"_to_"+rg[1];
+  if(a==="xsales"){
+   var xo=await sb.from("orders").select("order_no,created_at,delivered_at,subtotal,gst_total,total,pay_method,pay_status,profiles(full_name,phone),order_items(gst_percent)").eq("status","delivered").gte("delivered_at",rg[0]+"T00:00:00+05:30").lte("delivered_at",rg[1]+"T23:59:59+05:30").order("delivered_at");
+   if(xo.error){alert(xo.error.message);return}
+   var rs=[["Order no","Order date","Delivered on","Customer","Phone","Taxable value","GST","Total","GST rates %","Payment method","Payment status"]];
+   (xo.data||[]).forEach(function(o){var pf=o.profiles||{},rt=[];(o.order_items||[]).forEach(function(i){if(rt.indexOf(Number(i.gst_percent))<0)rt.push(Number(i.gst_percent))});
+    rs.push([o.order_no,ist(o.created_at),ist(o.delivered_at),pf.full_name||"",pf.phone||"",o.subtotal,o.gst_total,o.total,rt.join("/"),o.pay_method,o.pay_status])});
+   dlCsv("nuvicon_sales_"+nm+".csv",rs)}
+  else if(a==="xexp"){
+   var xe=await sb.from("expenses").select("spent_on,category,amount,note").gte("spent_on",rg[0]).lte("spent_on",rg[1]).order("spent_on");
+   if(xe.error){alert(xe.error.message);return}
+   dlCsv("nuvicon_expenses_"+nm+".csv",[["Date","Category","Amount","Note"]].concat((xe.data||[]).map(function(x){return [x.spent_on,x.category,x.amount,x.note||""]})))}
+  else{
+   var xc=await sb.from("credit_payments").select("created_at,amount,note,profiles:customer_id(full_name,phone)").gte("created_at",rg[0]+"T00:00:00+05:30").lte("created_at",rg[1]+"T23:59:59+05:30").order("created_at");
+   if(xc.error){alert(xc.error.message);return}
+   dlCsv("nuvicon_credit_payments_"+nm+".csv",[["Date","Customer","Phone","Amount","Note"]].concat((xc.data||[]).map(function(x){var pf=x.profiles||{};return [ist(x.created_at),pf.full_name||"",pf.phone||"",x.amount,x.note||""]})))}}
+ else if(a==="nadd"){
+  var nf=S.nf,nb=nf.brand.trim(),nn=nf.name.trim(),nc=nf.cat.trim(),nl=nf.label.trim(),np=Number(nf.price),ng=Number(nf.gst);
+  if(!nb||!nn||!nc||!nl){alert("Fill brand, item name, category and size");return}
+  if(!(np>0)){alert("Enter a valid selling price");return}
+  if(nf.cost!==""&&!(Number(nf.cost)>=0)){alert("Invalid cost price");return}
+  var ex=S.inv.find(function(v){return v.products.brand.toLowerCase()===nb.toLowerCase()&&v.products.name.toLowerCase()===nn.toLowerCase()}),pid;
+  if(ex){pid=ex.product_id;if(S.inv.some(function(v){return v.product_id===pid&&v.label.toLowerCase()===nl.toLowerCase()})){alert("This size already exists for this item");return}}
+  else{var pi=await sb.from("products").insert({brand:nb,name:nn,category:nc,gst_percent:ng}).select("id").single();if(pi.error){alert(pi.error.message);return}pid=pi.data.id}
+  var vi2=await sb.from("variants").insert({product_id:pid,label:nl,price:np}).select("id").single();
+  if(vi2.error){alert(vi2.error.message);return}
+  var ii=await sb.from("inventory").insert({variant_id:vi2.data.id,total:0});if(ii.error){alert(ii.error.message);return}
+  if(nf.cost!==""){var cc=await sb.rpc("set_variant_cost",{p_variant:vi2.data.id,p_cost:Number(nf.cost),p_reason:"new item"});if(cc.error)alert("Item added, but cost was not saved: "+cc.error.message)}
+  await audit("item_added","variants",vi2.data.id,{name:nb+" "+nn,label:nl,price:np,gst:ng,category:nc});
+  S.nf={brand:"",name:"",cat:nc,gst:nf.gst,label:"",price:"",cost:""};toast("Item added");await loadInv()}
+ else if(a==="pper"){S.pper=id;await loadProfit()}
+ else if(a==="eadd"){
+  var ea=S.ef,am2=Number(ea.amt);if(!(am2>0)){alert("Enter a valid amount");return}
+  var ei=await sb.from("expenses").insert({category:ea.cat,amount:am2,note:ea.note.trim()||null,created_by:S.user.id}).select("id").single();
+  if(ei.error)alert(ei.error.message);else{await audit("expense_added","expenses",ei.data.id,{category:ea.cat,amount:am2,note:ea.note.trim()});S.ef={cat:ea.cat,amt:"",note:""};toast("Expense added");await loadProfit()}}
+ else if(a==="edel"){
+  var ex=S.exps.find(function(x){return String(x.id)===String(id)});if(!ex)return;
+  var ew=why("Delete expense "+ex.category+" "+fmt(ex.amount),true);if(ew===null)return;
+  var ed=await sb.from("expenses").delete().eq("id",id);
+  if(ed.error)alert(ed.error.message);else{await audit("expense_deleted","expenses",id,{category:ex.category,amount:Number(ex.amount),note:ex.note||"",reason:ew});toast("Deleted");await loadProfit()}}
+ else if(a==="ccost"){
+  var cv0=S.inv.find(function(x){return String(x.id)===String(id)}),old=S.costs[cv0.id];
+  var nc=prompt("Cost price for "+cv0.products.brand+" "+cv0.products.name+" ("+cv0.label+") before GST, per unit",old==null?"":old);if(nc===null)return;
+  if(String(nc).trim()===""||!(Number(nc)>=0)){alert("Invalid cost");return}nc=Number(nc);
+  var cr4=await sb.rpc("set_variant_cost",{p_variant:cv0.id,p_cost:nc,p_reason:"cost price"});
+  if(cr4.error)alert(cr4.error.message);else{toast("Cost saved");await loadCosts()}}
  else if(a==="srz"){
   var rk=document.getElementById("rzk").value.trim();if(rk&&!/^rzp_(test|live)_/.test(rk)){alert("The Key Id starts with 'rzp_test_' or 'rzp_live_'");return}
   var rkw=why("Razorpay Key Id",false);if(rkw===null)return;
@@ -509,6 +619,8 @@ document.addEventListener("input",function(e){
  else if(e.target.dataset.bulk){S.bulk.vals[e.target.dataset.bulk]=e.target.value}
  else if(e.target.dataset.bi!=null&&e.target.dataset.f==="q"){S.bill.rows[+e.target.dataset.bi].q=e.target.value}
  else if(e.target.dataset.zf){S.zonef=e.target.value}
+ else if(e.target.dataset.nf){S.nf[e.target.dataset.nf]=e.target.value}
+ else if(e.target.dataset.ef){S.ef[e.target.dataset.ef]=e.target.value}
  else if(e.target.dataset.cf){var cv=e.target.value;if(e.target.dataset.cf==="phone")cv=cv.replace(/\D/g,"");S.cf[e.target.dataset.cf]=cv}
  else if(e.target.dataset.pf){var pv=e.target.value;if(e.target.dataset.pf==="phone")pv=pv.replace(/\D/g,"");S.pf[e.target.dataset.pf]=pv}
  else if(e.target.dataset.sf){var sv=e.target.value;if(e.target.dataset.sf==="phone")sv=sv.replace(/\D/g,"");S.sf[e.target.dataset.sf]=sv}
