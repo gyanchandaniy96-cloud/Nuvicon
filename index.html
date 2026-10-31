@@ -163,7 +163,23 @@ function billV(){
    '<div class="flex"><input type="number" inputmode="numeric" min="0" data-bi="'+i+'" data-f="q" value="'+esc(r.q)+'" placeholder="Qty" style="width:110px;margin:0"><button class="btn bad sm" data-a="brm" data-id="'+i+'">Remove</button></div>'+(r.c?'<br><small>Purchase rate '+'₹'+r.c+'/kg after discount</small>':'')+(r.raw?'<br><small>Bill line: '+esc(r.raw)+'</small>':'')+'</div>'}).join("")+(b.rows.some(function(r){return r.c})?'<label style="display:block;margin:8px 0"><input type="checkbox" id="billcost" style="width:auto"'+(b.cost===false?'':' checked')+'> Also update the cost price from this bill (rate per kg after discount, before GST)</label>':'')+
   '<div class="flex" style="margin-top:8px"><button class="btn ghost" data-a="baddrow">+ Row</button><button class="btn" data-a="bsave">Add to stock</button></div>':'')}
 
-function why(msg,req){var r=prompt(msg+"\nEnter a reason"+(req?" (zaroori)":" (optional)"));if(r===null)return null;r=r.trim();if(req&&!r){alert("A reason is required");return null}return r}
+var DLG=null;
+function dlgOpen(msg,mode,def){return new Promise(function(res){
+ if(DLG){DLG.remove();DLG=null}
+ var o=document.createElement("div");o.style.cssText="position:fixed;inset:0;background:rgba(20,25,28,.55);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px";
+ var c=document.createElement("div");c.style.cssText="background:#fff;border-radius:12px;padding:18px;width:100%;max-width:380px;box-shadow:0 10px 40px rgba(0,0,0,.3)";
+ var t=document.createElement("div");t.style.cssText="white-space:pre-wrap;font-size:15px;margin-bottom:12px";t.textContent=msg;c.appendChild(t);
+ var inp=null;if(mode==="ask"){inp=document.createElement("input");inp.value=def==null?"":String(def);inp.style.cssText="width:100%;margin-bottom:12px";c.appendChild(inp)}
+ var row=document.createElement("div");row.style.cssText="display:flex;gap:8px;justify-content:flex-end";
+ var done=function(v){o.remove();DLG=null;res(v)};
+ if(mode!=="alert"){var cb=document.createElement("button");cb.className="btn ghost";cb.textContent="Cancel";cb.onclick=function(){done(mode==="ask"?null:false)};row.appendChild(cb)}
+ var ob=document.createElement("button");ob.className="btn";ob.textContent="OK";ob.onclick=function(){done(mode==="ask"?inp.value:true)};row.appendChild(ob);
+ c.appendChild(row);o.appendChild(c);document.body.appendChild(o);DLG=o;
+ if(inp){inp.focus();inp.select();inp.onkeydown=function(e){if(e.key==="Enter")ob.click()}}else ob.focus()})}
+function ask(msg,def){return dlgOpen(msg,"ask",def)}
+function conf(msg){return dlgOpen(msg,"conf")}
+function showAlert(msg){dlgOpen(String(msg),"alert")}
+async function why(msg,req){var r=await ask(msg+"\nEnter a reason"+(req?" (required)":" (optional)"),"");if(r===null)return null;r=r.trim();if(req&&!r){showAlert("A reason is required");return null}return r}
 var ALBL={credit_set:"Credit set",credit_payment:"Credit payment",payment_received:"Online payment",payment_after_cancel:"Payment after cancel",price_change:"Price change",gst_change:"GST change",stock_received:"Stock received",bulk_stock:"Bulk stock",bill_stock:"Bill stock",visibility:"Show / Hide",order_status:"Order status",order_note:"Order note",staff_role:"Staff role",staff_invited:"Staff invited",partner_assigned:"Partner assigned",partner_added:"Partner added",partner_status:"Partner status",vehicle_added:"Vehicle added",vehicle_status:"Vehicle status",rate_card:"Rate card",store_hours:"Store timing",store_setting:"Store setting",zone_change:"Zone",low_stock:"Low stock limit",cost_price:"Cost price",expense_added:"Expense added",expense_deleted:"Expense deleted",item_added:"Item added",catalog_reset:"Catalog cleared"};
 var DAYS=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 async function loadCfg(){
@@ -393,36 +409,36 @@ document.addEventListener("click",async function(e){
   if(r2.error)S.err=r2.error.message;else{S.step="phone";S.otp="";S.boot=true;render();return whoami()}}
  else if(a==="st"){
   var s=b.dataset.s;
-  var rs0=null;if(s==="cancelled"){if(!confirm("Cancel this order? Reserved stock will be released."))return;rs0=why("Cancelling order",true);if(rs0===null)return}
+  var rs0=null;if(s==="cancelled"){if(!await conf("Cancel this order? Reserved stock will be released."))return;rs0=await why("Cancelling order",true);if(rs0===null)return}
   b.disabled=true;var r3=await sb.rpc("set_order_status",{p_order:+id,p_status:s});
-  if(r3.error){alert(r3.error.message)}else{toast("Order updated");if(rs0)await audit("order_note","orders",id,{reason:rs0})}
+  if(r3.error){showAlert(r3.error.message)}else{toast("Order updated");if(rs0)await audit("order_note","orders",id,{reason:rs0})}
   await loadAll()}
  else if(a==="recv"){
-  var v=S.inv.find(function(x){return x.id==id}),q=prompt("Quantity received for "+v.products.name+" ("+v.label+")");
+  var v=S.inv.find(function(x){return x.id==id}),q=await ask("Quantity received for "+v.products.name+" ("+v.label+")");
   q=parseInt(q,10);
-  if(q>0){var rr=why("Stock receive",false);if(rr===null)return;var tot=(v.inv?v.inv.total:0)+q;
+  if(q>0){var rr=await why("Stock receive",false);if(rr===null)return;var tot=(v.inv?v.inv.total:0)+q;
    var r4=await sb.from("inventory").upsert({variant_id:+id,total:tot,last_received:new Date().toISOString().slice(0,10)});
-   if(r4.error)alert(r4.error.message);else{await audit("stock_received","inventory",id,{qty:q,total:tot,reason:rr});toast("Stock updated");await loadInv()}}}
+   if(r4.error)showAlert(r4.error.message);else{await audit("stock_received","inventory",id,{qty:q,total:tot,reason:rr});toast("Stock updated");await loadInv()}}}
  else if(a==="kgrate"){
   var kv=S.inv.find(function(x){return x.id==id}),sibs=S.inv.filter(function(x){return x.product_id===kv.product_id&&x.fee_basis==="weight"&&Number(x.weight_kg)>0});
-  var kr=prompt("New SELLING rate per kg INCLUDING GST (₹).\nThis updates all "+sibs.length+" sizes of "+kv.products.brand+" "+kv.products.name+".",kv.price_per_kg==null?"":Math.round(kv.price_per_kg*gi(kv.products.gst_percent)*100)/100);if(kr===null)return;
-  kr=parseFloat(kr);if(!(kr>0)){alert("Invalid rate");return}var krx=r4(kr/gi(kv.products.gst_percent));
-  var kc=prompt("Your PURCHASE rate per kg (₹, before GST). Leave empty to keep the old cost.","");if(kc===null)return;
-  var kcn=kc.trim()===""?null:parseFloat(kc);if(kcn!==null&&!(kcn>=0)){alert("Invalid purchase rate");return}
-  var kw=why("Changing steel rate to "+kr+" per kg",true);if(kw===null)return;
+  var kr=await ask("New SELLING rate per kg INCLUDING GST (₹).\nThis updates all "+sibs.length+" sizes of "+kv.products.brand+" "+kv.products.name+".",kv.price_per_kg==null?"":Math.round(kv.price_per_kg*gi(kv.products.gst_percent)*100)/100);if(kr===null)return;
+  kr=parseFloat(kr);if(!(kr>0)){showAlert("Invalid rate");return}var krx=r4(kr/gi(kv.products.gst_percent));
+  var kc=await ask("Your PURCHASE rate per kg (₹, before GST). Leave empty to keep the old cost.","");if(kc===null)return;
+  var kcn=kc.trim()===""?null:parseFloat(kc);if(kcn!==null&&!(kcn>=0)){showAlert("Invalid purchase rate");return}
+  var kw=await why("Changing steel rate to "+kr+" per kg",true);if(kw===null)return;
   var bad=0;
   for(var ki=0;ki<sibs.length;ki++){var sv=sibs[ki],np2=r4(krx*Number(sv.weight_kg));
    var ku=await sb.from("variants").update({price:np2,price_per_kg:krx}).eq("id",sv.id);
    if(ku.error){bad++;continue}
    await audit("price_change","variants",sv.id,{from:sv.price,to:np2,reason:kw});
    if(kcn!==null){var kk=await sb.rpc("set_variant_cost",{p_variant:sv.id,p_cost:Math.round(kcn*Number(sv.weight_kg)*100)/100,p_reason:kw});if(kk.error)bad++}}
-  if(bad)alert("Some sizes could not be updated ("+bad+"). Please check and try again.");else toast("Updated "+sibs.length+" sizes");
+  if(bad)showAlert("Some sizes could not be updated ("+bad+"). Please check and try again.");else toast("Updated "+sibs.length+" sizes");
   await loadInv()}
  else if(a==="price"){
-  var v2=S.inv.find(function(x){return x.id==id}),p=prompt("New price for "+v2.products.name+" ("+v2.label+") INCLUDING GST (₹)",Math.round(v2.price*gi(v2.products.gst_percent)*100)/100);
+  var v2=S.inv.find(function(x){return x.id==id}),p=await ask("New price for "+v2.products.name+" ("+v2.label+") INCLUDING GST (₹)",Math.round(v2.price*gi(v2.products.gst_percent)*100)/100);
   p=parseFloat(p);if(p>=0)p=r4(p/gi(v2.products.gst_percent));
-  if(p>=0){var rp=why("Changing price",true);if(rp===null)return;var r5=await sb.from("variants").update({price:p}).eq("id",id);
-   if(r5.error)alert(r5.error.message);else{await audit("price_change","variants",id,{from:v2.price,to:p,reason:rp});toast("Price updated");await loadInv()}}}
+  if(p>=0){var rp=await why("Changing price",true);if(rp===null)return;var r5=await sb.from("variants").update({price:p}).eq("id",id);
+   if(r5.error)showAlert(r5.error.message);else{await audit("price_change","variants",id,{from:v2.price,to:p,reason:rp});toast("Price updated");await loadInv()}}}
  else if(a==="bmode")S.bulk.mode=id;
  else if(a==="bcat")S.bulk.cat=id;
  else if(a==="baddrow")S.bill.rows.push({v:"",q:"",raw:""});
@@ -434,223 +450,223 @@ document.addEventListener("click",async function(e){
    if(t<res||t<0){bad.push(vv.products.name+" "+vv.label);return}
    var row={variant_id:+k,total:t};if(B.mode==="add")row.last_received=today2;
    rows.push(row);det.push({v:+k,from:cur,to:t})});
-  if(bad.length){alert("Cannot be below reserved stock: "+bad.join(", "));render();return}
-  if(!rows.length||!confirm(rows.length+" items — update stock?"))return;var rbk=why("Bulk stock update",B.mode==="set");if(rbk===null)return;
+  if(bad.length){showAlert("Cannot be below reserved stock: "+bad.join(", "));render();return}
+  if(!rows.length||!await conf(rows.length+" items — update stock?"))return;var rbk=await why("Bulk stock update",B.mode==="set");if(rbk===null)return;
   var rb=await sb.from("inventory").upsert(rows);
-  if(rb.error)alert(rb.error.message);else{await audit("bulk_stock","inventory","bulk",{mode:B.mode,items:det,reason:rbk});S.bulk.vals={};toast("Stock updated");await loadInv()}}
+  if(rb.error)showAlert(rb.error.message);else{await audit("bulk_stock","inventory","bulk",{mode:B.mode,items:det,reason:rbk});S.bulk.vals={};toast("Stock updated");await loadInv()}}
  else if(a==="bsave"){
   var agg={};
   S.bill.rows.forEach(function(r){var q=parseInt(r.q,10);if(r.v&&q>0)agg[r.v]=(agg[r.v]||0)+q});
   var ks=Object.keys(agg);
-  if(!ks.length){alert("There are no items or quantities.");return}
-  if(!confirm(ks.length+" items — add to stock?"))return;var rbl=why("Bill se stock",false);if(rbl===null)return;
+  if(!ks.length){showAlert("There are no items or quantities.");return}
+  if(!await conf(ks.length+" items — add to stock?"))return;var rbl=await why("Bill se stock",false);if(rbl===null)return;
   var rows2=[],det2=[];
   ks.forEach(function(k){var vv=S.inv.find(function(z){return z.id==k}),cur=vv.inv?vv.inv.total:0;rows2.push({variant_id:+k,total:cur+agg[k],last_received:new Date().toISOString().slice(0,10)});det2.push({v:+k,qty:agg[k]})});
   var rs=await sb.from("inventory").upsert(rows2);
-  if(rs.error)alert(rs.error.message);else{await audit("bill_stock","inventory","bill",{file:S.bill.name,items:det2,reason:rbl});var cmsg="";if(S.bill.cost!==false){var cn=0;for(var ci=0;ci<S.bill.rows.length;ci++){var cr5=S.bill.rows[ci],cv5=cr5.v&&S.inv.find(function(z){return String(z.id)===String(cr5.v)});if(cr5.c&&cv5&&Number(cv5.weight_kg)>0){var cx=await sb.rpc("set_variant_cost",{p_variant:cv5.id,p_cost:Math.round(cr5.c*Number(cv5.weight_kg)*100)/100,p_reason:"from bill"});if(!cx.error)cn++}}if(cn)cmsg=", cost updated for "+cn}
+  if(rs.error)showAlert(rs.error.message);else{await audit("bill_stock","inventory","bill",{file:S.bill.name,items:det2,reason:rbl});var cmsg="";if(S.bill.cost!==false){var cn=0;for(var ci=0;ci<S.bill.rows.length;ci++){var cr5=S.bill.rows[ci],cv5=cr5.v&&S.inv.find(function(z){return String(z.id)===String(cr5.v)});if(cr5.c&&cv5&&Number(cv5.weight_kg)>0){var cx=await sb.rpc("set_variant_cost",{p_variant:cv5.id,p_cost:Math.round(cr5.c*Number(cv5.weight_kg)*100)/100,p_reason:"from bill"});if(!cx.error)cn++}}if(cn)cmsg=", cost updated for "+cn}
    S.bill={busy:false,msg:"",name:"",rows:[],err:"",done:false};toast("Stock updated"+cmsg);await loadInv();S.view="stock"}}
  else if(a==="gst"){
-  var v4=S.inv.find(function(x){return x.id==id}),g=prompt("GST % for "+v4.products.brand+" "+v4.products.name+" (sab sizes par lagega). 0, 5, 12, 18 ya 28",v4.products.gst_percent);
+  var v4=S.inv.find(function(x){return x.id==id}),g=await ask("GST % for "+v4.products.brand+" "+v4.products.name+" (sab sizes par lagega). 0, 5, 12, 18 ya 28",v4.products.gst_percent);
   if(g!==null){g=parseFloat(g);
-   if([0,5,12,18,28].indexOf(g)<0)alert("Enter only 0, 5, 12, 18 or 28");
-   else{var rgw=why("Changing GST",true);if(rgw===null)return;var rg=await sb.from("products").update({gst_percent:g}).eq("id",v4.product_id);
-    if(rg.error)alert(rg.error.message);else{await audit("gst_change","products",v4.product_id,{from:v4.products.gst_percent,to:g,reason:rgw});toast("GST updated (applies to new orders)");await loadInv()}}}}
+   if([0,5,12,18,28].indexOf(g)<0)showAlert("Enter only 0, 5, 12, 18 or 28");
+   else{var rgw=await why("Changing GST",true);if(rgw===null)return;var rg=await sb.from("products").update({gst_percent:g}).eq("id",v4.product_id);
+    if(rg.error)showAlert(rg.error.message);else{await audit("gst_change","products",v4.product_id,{from:v4.products.gst_percent,to:g,reason:rgw});toast("GST updated (applies to new orders)");await loadInv()}}}}
  else if(a==="sadd"){
-  var sf=S.sf;if(!/^[6-9][0-9]{9}$/.test(sf.phone)){alert("Enter a valid 10-digit number");return}
+  var sf=S.sf;if(!/^[6-9][0-9]{9}$/.test(sf.phone)){showAlert("Enter a valid 10-digit number");return}
   var rsa=await sb.rpc("set_staff",{p_phone:sf.phone,p_role:sf.role,p_name:sf.name,p_reason:"added from panel"});
-  if(rsa.error)alert(rsa.error.message);else{toast(rsa.data==="invited"?"Added. They become staff as soon as they log in with this number":"Role updated");S.sf={name:"",phone:"",role:"staff"};await loadStaff()}}
+  if(rsa.error)showAlert(rsa.error.message);else{toast(rsa.data==="invited"?"Added. They become staff as soon as they log in with this number":"Role updated");S.sf={name:"",phone:"",role:"staff"};await loadStaff()}}
  else if(a==="srole"){
-  var sp=S.staff.find(function(x){return x.id===id}),nr=prompt("Enter the new role: staff, admin or customer (customer removes access)",sp.role);
+  var sp=S.staff.find(function(x){return x.id===id}),nr=await ask("Enter the new role: staff, admin or customer (customer removes access)",sp.role);
   if(nr!==null){nr=nr.trim().toLowerCase();
-   if(["staff","admin","customer"].indexOf(nr)<0)alert("Enter only staff, admin or customer");
-   else{var rsr=why("Changing role",true);if(rsr===null)return;
+   if(["staff","admin","customer"].indexOf(nr)<0)showAlert("Enter only staff, admin or customer");
+   else{var rsr=await why("Changing role",true);if(rsr===null)return;
     var rr2=await sb.rpc("set_staff",{p_phone:sp.phone,p_role:nr,p_name:"",p_reason:rsr});
-    if(rr2.error)alert(rr2.error.message);else{toast("Role updated");await loadStaff()}}}}
+    if(rr2.error)showAlert(rr2.error.message);else{toast("Role updated");await loadStaff()}}}}
  else if(a==="sname"){
-  var sp2=S.staff.find(function(x){return x.id===id}),nn=prompt("Name",sp2.full_name||"");
+  var sp2=S.staff.find(function(x){return x.id===id}),nn=await ask("Name",sp2.full_name||"");
   if(nn!==null&&nn.trim()){var rr3=await sb.rpc("set_staff",{p_phone:sp2.phone,p_role:sp2.role,p_name:nn.trim(),p_reason:"name update"});
-   if(rr3.error)alert(rr3.error.message);else{toast("Name saved");await loadStaff()}}}
+   if(rr3.error)showAlert(rr3.error.message);else{toast("Name saved");await loadStaff()}}}
  else if(a==="sinv"){
-  if(!confirm("Remove this pending invite?"))return;
+  if(!await conf("Remove this pending invite?"))return;
   var rd=await sb.from("staff_invites").delete().eq("phone",id);
-  if(rd.error)alert(rd.error.message);else{await audit("staff_invited","profiles",id,{phone:id,to:"removed",reason:"invite removed"});await loadStaff()}}
+  if(rd.error)showAlert(rd.error.message);else{await audit("staff_invited","profiles",id,{phone:id,to:"removed",reason:"invite removed"});await loadStaff()}}
  else if(a==="sforce"){
-  var nf=!S.cfg.force,rf=why(nf?"Closing the store":"Opening the store",true);if(rf===null)return;
+  var nf=!S.cfg.force,rf=await why(nf?"Closing the store":"Opening the store",true);if(rf===null)return;
   var rsf=await sb.from("settings").upsert({key:"force_closed",value:nf});
-  if(rsf.error)alert(rsf.error.message);else{await audit("store_setting","settings","force_closed",{force_closed:nf,reason:rf});toast(nf?"Store closed":"Store open");await loadCfg()}}
+  if(rsf.error)showAlert(rsf.error.message);else{await audit("store_setting","settings","force_closed",{force_closed:nf,reason:rf});toast(nf?"Store closed":"Store open");await loadCfg()}}
  else if(a==="shsave"){
-  var rh=why("Changing store timing",true);if(rh===null)return;
+  var rh=await why("Changing store timing",true);if(rh===null)return;
   var hrows=S.cfg.hours.map(function(h){return {day:h.day,is_open:h.is_open,opens:String(h.opens).slice(0,5),closes:String(h.closes).slice(0,5)}});
   var rsh=await sb.from("store_hours").upsert(hrows);
-  if(rsh.error)alert(rsh.error.message);else{await audit("store_hours","store_hours","all",{hours:hrows,reason:rh});toast("Timing save");await loadCfg()}}
+  if(rsh.error)showAlert(rsh.error.message);else{await audit("store_hours","store_hours","all",{hours:hrows,reason:rh});toast("Timing save");await loadCfg()}}
  else if(a==="cset"){
-  var cs=S.cf;if(!/^[6-9][0-9]{9}$/.test(cs.phone)||!(Number(cs.sd)>=0)||cs.sd===""){alert("Enter a 10-digit number and the SD");return}
-  var cw=why("Credit on: +91"+cs.phone+", SD "+cs.sd,true);if(cw===null)return;
+  var cs=S.cf;if(!/^[6-9][0-9]{9}$/.test(cs.phone)||!(Number(cs.sd)>=0)||cs.sd===""){showAlert("Enter a 10-digit number and the SD");return}
+  var cw=await why("Credit on: +91"+cs.phone+", SD "+cs.sd,true);if(cw===null)return;
   var cr=await sb.rpc("set_credit",{p_phone:"91"+cs.phone,p_enabled:true,p_sd:Number(cs.sd),p_reason:cw});
-  if(cr.error)alert(cr.error.message);else{S.cf={phone:"",sd:""};toast("Credit on");await loadCredit()}}
+  if(cr.error)showAlert(cr.error.message);else{S.cf={phone:"",sd:""};toast("Credit on");await loadCredit()}}
  else if(a==="csd"||a==="ctog"){
   var sd0=Number(b.dataset.sd),en0=b.dataset.en==="1",sd1=sd0,en1=en0;
-  if(a==="csd"){var ns=prompt("New security deposit (₹)",sd0);if(ns===null)return;sd1=Number(ns);if(!(sd1>=0)){alert("Invalid SD");return}}else en1=!en0;
-  var cw2=why(a==="csd"?"Changing SD":(en1?"Credit on":"Credit off"),true);if(cw2===null)return;
+  if(a==="csd"){var ns=await ask("New security deposit (₹)",sd0);if(ns===null)return;sd1=Number(ns);if(!(sd1>=0)){showAlert("Invalid SD");return}}else en1=!en0;
+  var cw2=await why(a==="csd"?"Changing SD":(en1?"Credit on":"Credit off"),true);if(cw2===null)return;
   var cr2=await sb.rpc("set_credit",{p_phone:id,p_enabled:en1,p_sd:sd1,p_reason:cw2});
-  if(cr2.error)alert(cr2.error.message);else{toast("Saved");await loadCredit()}}
+  if(cr2.error)showAlert(cr2.error.message);else{toast("Saved");await loadCredit()}}
  else if(a==="cpay"){
-  var am=prompt("How much did the customer pay? (₹)");if(am===null)return;am=Number(am);if(!(am>0)){alert("Invalid amount");return}
-  var nt=prompt("Note (cash / UPI / cheque), can be left empty","cash");if(nt===null)return;
+  var am=await ask("How much did the customer pay? (₹)");if(am===null)return;am=Number(am);if(!(am>0)){showAlert("Invalid amount");return}
+  var nt=await ask("Note (cash / UPI / cheque), can be left empty","cash");if(nt===null)return;
   var cr3=await sb.rpc("record_credit_payment",{p_phone:id,p_amount:am,p_note:nt});
-  if(cr3.error)alert(cr3.error.message);else{toast("Payment recorded");await loadCredit()}}
+  if(cr3.error)showAlert(cr3.error.message);else{toast("Payment recorded");await loadCredit()}}
  else if(a==="xsales"||a==="xexp"||a==="xcred"){
   var rg=prRange(),nm=rg[0]+"_to_"+rg[1];
   if(a==="xsales"){
    var xo=await sb.from("orders").select("order_no,created_at,delivered_at,subtotal,gst_total,total,pay_method,pay_status,profiles(full_name,phone),order_items(gst_percent)").eq("status","delivered").gte("delivered_at",rg[0]+"T00:00:00+05:30").lte("delivered_at",rg[1]+"T23:59:59+05:30").order("delivered_at");
-   if(xo.error){alert(xo.error.message);return}
+   if(xo.error){showAlert(xo.error.message);return}
    var rs=[["Order no","Order date","Delivered on","Customer","Phone","Taxable value","GST","Total","GST rates %","Payment method","Payment status"]];
    (xo.data||[]).forEach(function(o){var pf=o.profiles||{},rt=[];(o.order_items||[]).forEach(function(i){if(rt.indexOf(Number(i.gst_percent))<0)rt.push(Number(i.gst_percent))});
     rs.push([o.order_no,ist(o.created_at),ist(o.delivered_at),pf.full_name||"",pf.phone||"",o.subtotal,o.gst_total,o.total,rt.join("/"),o.pay_method,o.pay_status])});
    dlCsv("nuvicon_sales_"+nm+".csv",rs)}
   else if(a==="xexp"){
    var xe=await sb.from("expenses").select("spent_on,category,amount,note").gte("spent_on",rg[0]).lte("spent_on",rg[1]).order("spent_on");
-   if(xe.error){alert(xe.error.message);return}
+   if(xe.error){showAlert(xe.error.message);return}
    dlCsv("nuvicon_expenses_"+nm+".csv",[["Date","Category","Amount","Note"]].concat((xe.data||[]).map(function(x){return [x.spent_on,x.category,x.amount,x.note||""]})))}
   else{
    var xc=await sb.from("credit_payments").select("created_at,amount,note,profiles:customer_id(full_name,phone)").gte("created_at",rg[0]+"T00:00:00+05:30").lte("created_at",rg[1]+"T23:59:59+05:30").order("created_at");
-   if(xc.error){alert(xc.error.message);return}
+   if(xc.error){showAlert(xc.error.message);return}
    dlCsv("nuvicon_credit_payments_"+nm+".csv",[["Date","Customer","Phone","Amount","Note"]].concat((xc.data||[]).map(function(x){var pf=x.profiles||{};return [ist(x.created_at),pf.full_name||"",pf.phone||"",x.amount,x.note||""]})))}}
  else if(a==="nadd"){
   var nf=S.nf,nb=nf.brand.trim(),nn=nf.name.trim(),nc=nf.cat.trim(),nl=nf.label.trim(),np=Number(nf.price),ng=Number(nf.gst);
-  if(!nn||!nc||!nl){alert("Fill item name, category and size");return}
-  if(!(np>0)){alert("Enter a valid selling price");return}
-  if(nf.cost!==""&&!(Number(nf.cost)>=0)){alert("Invalid cost price");return}
-  if(nf.basis==="weight"&&!(Number(nf.kg)>0)){alert("Enter the weight of one unit in kg");return}
+  if(!nn||!nc||!nl){showAlert("Fill item name, category and size");return}
+  if(!(np>0)){showAlert("Enter a valid selling price");return}
+  if(nf.cost!==""&&!(Number(nf.cost)>=0)){showAlert("Invalid cost price");return}
+  if(nf.basis==="weight"&&!(Number(nf.kg)>0)){showAlert("Enter the weight of one unit in kg");return}
   var ex=S.inv.find(function(v){return v.products.brand.toLowerCase()===nb.toLowerCase()&&v.products.name.toLowerCase()===nn.toLowerCase()}),pid;
-  if(ex){pid=ex.product_id;if(S.inv.some(function(v){return v.product_id===pid&&v.label.toLowerCase()===nl.toLowerCase()})){alert("This size already exists for this item");return}}
-  else{var pi=await sb.from("products").insert({brand:nb,name:nn,category:nc,gst_percent:ng}).select("id").single();if(pi.error){alert(pi.error.message);return}pid=pi.data.id}
+  if(ex){pid=ex.product_id;if(S.inv.some(function(v){return v.product_id===pid&&v.label.toLowerCase()===nl.toLowerCase()})){showAlert("This size already exists for this item");return}}
+  else{var pi=await sb.from("products").insert({brand:nb,name:nn,category:nc,gst_percent:ng}).select("id").single();if(pi.error){showAlert(pi.error.message);return}pid=pi.data.id}
   var wt=nf.basis==="weight",kgv=Number(nf.kg),exv=r4(np/gi(ng)),pr0=wt?r4(exv*kgv):exv;
   var vi2=await sb.from("variants").insert({product_id:pid,label:nl,price:pr0,fee_basis:nf.basis,weight_kg:wt?kgv:null,price_per_kg:wt?exv:null}).select("id").single();
-  if(vi2.error){alert(vi2.error.message);return}
-  var ii=await sb.from("inventory").insert({variant_id:vi2.data.id,total:0});if(ii.error){alert(ii.error.message);return}
-  if(nf.cost!==""){var cc=await sb.rpc("set_variant_cost",{p_variant:vi2.data.id,p_cost:wt?Math.round(Number(nf.cost)*kgv*100)/100:Number(nf.cost),p_reason:"new item"});if(cc.error)alert("Item added, but cost was not saved: "+cc.error.message)}
+  if(vi2.error){showAlert(vi2.error.message);return}
+  var ii=await sb.from("inventory").insert({variant_id:vi2.data.id,total:0});if(ii.error){showAlert(ii.error.message);return}
+  if(nf.cost!==""){var cc=await sb.rpc("set_variant_cost",{p_variant:vi2.data.id,p_cost:wt?Math.round(Number(nf.cost)*kgv*100)/100:Number(nf.cost),p_reason:"new item"});if(cc.error)showAlert("Item added, but cost was not saved: "+cc.error.message)}
   await audit("item_added","variants",vi2.data.id,{name:nb+" "+nn,label:nl,price:pr0,gst:ng,category:nc});
   S.nf={brand:"",name:"",cat:nc,gst:nf.gst,label:"",price:"",cost:"",basis:"bag",kg:"",bt:false,kt:false};toast("Item added");await loadInv()}
  else if(a==="pper"){S.pper=id;await loadProfit()}
  else if(a==="eadd"){
-  var ea=S.ef,am2=Number(ea.amt);if(!(am2>0)){alert("Enter a valid amount");return}
+  var ea=S.ef,am2=Number(ea.amt);if(!(am2>0)){showAlert("Enter a valid amount");return}
   var ei=await sb.from("expenses").insert({category:ea.cat,amount:am2,note:ea.note.trim()||null,created_by:S.user.id}).select("id").single();
-  if(ei.error)alert(ei.error.message);else{await audit("expense_added","expenses",ei.data.id,{category:ea.cat,amount:am2,note:ea.note.trim()});S.ef={cat:ea.cat,amt:"",note:""};toast("Expense added");await loadProfit()}}
+  if(ei.error)showAlert(ei.error.message);else{await audit("expense_added","expenses",ei.data.id,{category:ea.cat,amount:am2,note:ea.note.trim()});S.ef={cat:ea.cat,amt:"",note:""};toast("Expense added");await loadProfit()}}
  else if(a==="edel"){
   var ex=S.exps.find(function(x){return String(x.id)===String(id)});if(!ex)return;
-  var ew=why("Delete expense "+ex.category+" "+fmt(ex.amount),true);if(ew===null)return;
+  var ew=await why("Delete expense "+ex.category+" "+fmt(ex.amount),true);if(ew===null)return;
   var ed=await sb.from("expenses").delete().eq("id",id);
-  if(ed.error)alert(ed.error.message);else{await audit("expense_deleted","expenses",id,{category:ex.category,amount:Number(ex.amount),note:ex.note||"",reason:ew});toast("Deleted");await loadProfit()}}
+  if(ed.error)showAlert(ed.error.message);else{await audit("expense_deleted","expenses",id,{category:ex.category,amount:Number(ex.amount),note:ex.note||"",reason:ew});toast("Deleted");await loadProfit()}}
  else if(a==="ccost"){
   var cv0=S.inv.find(function(x){return String(x.id)===String(id)}),old=S.costs[cv0.id];
-  var nc=prompt("Cost price for "+cv0.products.brand+" "+cv0.products.name+" ("+cv0.label+") before GST, per unit",old==null?"":old);if(nc===null)return;
-  if(String(nc).trim()===""||!(Number(nc)>=0)){alert("Invalid cost");return}nc=Number(nc);
+  var nc=await ask("Cost price for "+cv0.products.brand+" "+cv0.products.name+" ("+cv0.label+") before GST, per unit",old==null?"":old);if(nc===null)return;
+  if(String(nc).trim()===""||!(Number(nc)>=0)){showAlert("Invalid cost");return}nc=Number(nc);
   var cr4=await sb.rpc("set_variant_cost",{p_variant:cv0.id,p_cost:nc,p_reason:"cost price"});
-  if(cr4.error)alert(cr4.error.message);else{toast("Cost saved");await loadCosts()}}
+  if(cr4.error)showAlert(cr4.error.message);else{toast("Cost saved");await loadCosts()}}
  else if(a==="srz"){
-  var rk=document.getElementById("rzk").value.trim();if(rk&&!/^rzp_(test|live)_/.test(rk)){alert("The Key Id starts with 'rzp_test_' or 'rzp_live_'");return}
-  var rkw=why("Razorpay Key Id",false);if(rkw===null)return;
+  var rk=document.getElementById("rzk").value.trim();if(rk&&!/^rzp_(test|live)_/.test(rk)){showAlert("The Key Id starts with 'rzp_test_' or 'rzp_live_'");return}
+  var rkw=await why("Razorpay Key Id",false);if(rkw===null)return;
   var rkr=await sb.from("settings").upsert({key:"rzp_key_id",value:rk});
-  if(rkr.error)alert(rkr.error.message);else{await audit("store_setting","settings","rzp_key_id",{rzp_key_id:rk?"set":"removed",reason:rkw});S.cfg.rzk=rk;toast("Saved")}}
+  if(rkr.error)showAlert(rkr.error.message);else{await audit("store_setting","settings","rzp_key_id",{rzp_key_id:rk?"set":"removed",reason:rkw});S.cfg.rzk=rk;toast("Saved")}}
  else if(a==="sonl"){
-  var no=!S.cfg.onl;if(no&&!S.cfg.rzk){alert("Save the Key Id first");return}
-  var rnw=why(no?"Turning online payment on":"Turning online payment off",true);if(rnw===null)return;
+  var no=!S.cfg.onl;if(no&&!S.cfg.rzk){showAlert("Save the Key Id first");return}
+  var rnw=await why(no?"Turning online payment on":"Turning online payment off",true);if(rnw===null)return;
   var rnr=await sb.from("settings").upsert({key:"online_pay",value:no});
-  if(rnr.error)alert(rnr.error.message);else{await audit("store_setting","settings","online_pay",{online_pay:no,reason:rnw});toast(no?"Online on":"Online off");await loadCfg()}}
+  if(rnr.error)showAlert(rnr.error.message);else{await audit("store_setting","settings","online_pay",{online_pay:no,reason:rnw});toast(no?"Online on":"Online off");await loadCfg()}}
  else if(a==="sgm"){
-  var gk=document.getElementById("gmk").value.trim();var gw=why("Maps key",false);if(gw===null)return;
+  var gk=document.getElementById("gmk").value.trim();var gw=await why("Maps key",false);if(gw===null)return;
   var gr=await sb.from("settings").upsert({key:"gmaps_key",value:gk});
-  if(gr.error)alert(gr.error.message);else{await audit("store_setting","settings","gmaps_key",{gmaps_key:gk?"set":"removed",reason:gw});S.cfg.gkey=gk;toast("Saved")}}
+  if(gr.error)showAlert(gr.error.message);else{await audit("store_setting","settings","gmaps_key",{gmaps_key:gk?"set":"removed",reason:gw});S.cfg.gkey=gk;toast("Saved")}}
  else if(a==="gmy"){
-  if(!navigator.geolocation){alert("Location is not available on this phone");return}
-  navigator.geolocation.getCurrentPosition(function(p){document.getElementById("glat").value=p.coords.latitude.toFixed(6);document.getElementById("glng").value=p.coords.longitude.toFixed(6);toast("Location found. Now tap Save")},function(){alert("Could not get location. Allow permission")},{enableHighAccuracy:true,timeout:15000});return}
+  if(!navigator.geolocation){showAlert("Location is not available on this phone");return}
+  navigator.geolocation.getCurrentPosition(function(p){document.getElementById("glat").value=p.coords.latitude.toFixed(6);document.getElementById("glng").value=p.coords.longitude.toFixed(6);toast("Location found. Now tap Save")},function(){showAlert("Could not get location. Allow permission")},{enableHighAccuracy:true,timeout:15000});return}
  else if(a==="sgd"){
   var la=parseFloat(document.getElementById("glat").value),lo=parseFloat(document.getElementById("glng").value);
-  if(!(la>=-90&&la<=90&&lo>=-180&&lo<=180)){alert("Enter a valid latitude and longitude");return}
-  var gdw=why("Changing godown location",true);if(gdw===null)return;
+  if(!(la>=-90&&la<=90&&lo>=-180&&lo<=180)){showAlert("Enter a valid latitude and longitude");return}
+  var gdw=await why("Changing godown location",true);if(gdw===null)return;
   var gdr=await sb.from("settings").upsert({key:"godown",value:{lat:la,lng:lo}});
-  if(gdr.error)alert(gdr.error.message);else{await audit("store_setting","settings","godown",{lat:la,lng:lo,reason:gdw});S.cfg.godown={lat:la,lng:lo};toast("Godown ki location save")}}
+  if(gdr.error)showAlert(gdr.error.message);else{await audit("store_setting","settings","godown",{lat:la,lng:lo,reason:gdw});S.cfg.godown={lat:la,lng:lo};toast("Godown ki location save")}}
  else if(a==="srad"){
-  var rv=parseFloat(document.getElementById("radv").value);if(!(rv>=0)){alert("Enter a number");return}
-  var rw2=why("Changing max delivery distance",true);if(rw2===null)return;
+  var rv=parseFloat(document.getElementById("radv").value);if(!(rv>=0)){showAlert("Enter a number");return}
+  var rw2=await why("Changing max delivery distance",true);if(rw2===null)return;
   var rr7=await sb.from("settings").upsert({key:"max_radius_km",value:rv});
-  if(rr7.error)alert(rr7.error.message);else{await audit("store_setting","settings","max_radius_km",{km:rv,reason:rw2});S.cfg.rad=rv;toast("Saved")}}
+  if(rr7.error)showAlert(rr7.error.message);else{await audit("store_setting","settings","max_radius_km",{km:rv,reason:rw2});S.cfg.rad=rv;toast("Saved")}}
  else if(a==="frate"){
   var FK={fbag:["fee_per_bag","Rate per bag (₹)"],fqtl:["fee_per_quintal","Rate per quintal (₹)"],fkm:["fee_per_km","Rate per km beyond the included distance (₹)"],ffree:["fee_free_km","Distance included in the base fee (km)"],fmin:["fee_min","Minimum fee per order (₹)"]}[id];
-  var fv=prompt(FK[1],S.cfg[id]);if(fv===null)return;fv=parseFloat(fv);if(!(fv>=0)){alert("Invalid amount");return}
-  var fw=why("Changing "+FK[1],true);if(fw===null)return;
+  var fv=await ask(FK[1],S.cfg[id]);if(fv===null)return;fv=parseFloat(fv);if(!(fv>=0)){showAlert("Invalid amount");return}
+  var fw=await why("Changing "+FK[1],true);if(fw===null)return;
   var fr=await sb.from("settings").upsert({key:FK[0],value:fv});
-  if(fr.error)alert(fr.error.message);else{await audit("store_setting","settings",FK[0],{fee:fv,reason:fw});S.cfg[id]=fv;toast("Saved")}}
+  if(fr.error)showAlert(fr.error.message);else{await audit("store_setting","settings",FK[0],{fee:fv,reason:fw});S.cfg[id]=fv;toast("Saved")}}
  else if(a==="dfee"){
-  var df=prompt("Default partner fee (₹) when the order has no zone (map-pin orders)",S.cfg.dfee);df=parseFloat(df);
-  if(df>=0){var dw=why("Changing default fee",true);if(dw===null)return;
+  var df=await ask("Default partner fee (₹) when the order has no zone (map-pin orders)",S.cfg.dfee);df=parseFloat(df);
+  if(df>=0){var dw=await why("Changing default fee",true);if(dw===null)return;
    var dr=await sb.from("settings").upsert({key:"default_partner_fee",value:df});
-   if(dr.error)alert(dr.error.message);else{await audit("store_setting","settings","default_partner_fee",{fee:df,reason:dw});S.cfg.dfee=df;toast("Saved")}}}
+   if(dr.error)showAlert(dr.error.message);else{await audit("store_setting","settings","default_partner_fee",{fee:df,reason:dw});S.cfg.dfee=df;toast("Saved")}}}
  else if(a==="scity"){
-  var cv=document.getElementById("cityv").value.trim();if(!cv){alert("Enter the city name");return}
-  var cw=why("Changing city",true);if(cw===null)return;
+  var cv=document.getElementById("cityv").value.trim();if(!cv){showAlert("Enter the city name");return}
+  var cw=await why("Changing city",true);if(cw===null)return;
   var cr=await sb.from("settings").upsert({key:"city",value:cv});
-  if(cr.error)alert(cr.error.message);else{await audit("store_setting","settings","city",{city:cv,reason:cw});S.cfg.city=cv;toast("Saved")}}
+  if(cr.error)showAlert(cr.error.message);else{await audit("store_setting","settings","city",{city:cv,reason:cw});S.cfg.city=cv;toast("Saved")}}
  else if(a==="zadd"){
-  var zn=S.zonef.trim();if(!zn){alert("Enter the area name");return}
+  var zn=S.zonef.trim();if(!zn){showAlert("Enter the area name");return}
   var zr=await sb.from("zones").insert({name:zn}).select("id").single();
-  if(zr.error)alert(zr.error.message.indexOf("zones_name_key")>-1?"This area already exists":zr.error.message);
+  if(zr.error)showAlert(zr.error.message.indexOf("zones_name_key")>-1?"This area already exists":zr.error.message);
   else{await audit("zone_change","zones",zr.data.id,{name:zn,what:"added",reason:"added from panel"});S.zonef="";toast("Area added. Set its fee in the rate card");await loadPartners()}}
  else if(a==="zren"){
-  var zo=S.zones.find(function(x){return x.id==id}),zm=prompt("New name",zo.name);
-  if(zm!==null&&zm.trim()&&zm.trim()!==zo.name){var zq=why("Renaming area",true);if(zq===null)return;
+  var zo=S.zones.find(function(x){return x.id==id}),zm=await ask("New name",zo.name);
+  if(zm!==null&&zm.trim()&&zm.trim()!==zo.name){var zq=await why("Renaming area",true);if(zq===null)return;
    var zs=await sb.from("zones").update({name:zm.trim()}).eq("id",id);
-   if(zs.error)alert(zs.error.message);else{await audit("zone_change","zones",id,{name:zm.trim(),what:"renamed from "+zo.name,reason:zq});toast("Name changed");await loadPartners()}}}
+   if(zs.error)showAlert(zs.error.message);else{await audit("zone_change","zones",id,{name:zm.trim(),what:"renamed from "+zo.name,reason:zq});toast("Name changed");await loadPartners()}}}
  else if(a==="zvis"){
-  var zv=S.zones.find(function(x){return x.id==id}),zw=why((zv.active?"Hiding area: ":"Showing area: ")+zv.name,true);if(zw===null)return;
+  var zv=S.zones.find(function(x){return x.id==id}),zw=await why((zv.active?"Hiding area: ":"Showing area: ")+zv.name,true);if(zw===null)return;
   var zy=await sb.from("zones").update({active:!zv.active}).eq("id",id);
-  if(zy.error)alert(zy.error.message);else{await audit("zone_change","zones",id,{name:zv.name,what:zv.active?"hidden":"shown",reason:zw});await loadPartners()}}
+  if(zy.error)showAlert(zy.error.message);else{await audit("zone_change","zones",id,{name:zv.name,what:zv.active?"hidden":"shown",reason:zw});await loadPartners()}}
  else if(a==="slow"){
-  var lv=parseInt(document.getElementById("lowv").value,10);if(!(lv>=0)){alert("Enter a number");return}
-  var rl=why("Changing low stock limit",true);if(rl===null)return;
+  var lv=parseInt(document.getElementById("lowv").value,10);if(!(lv>=0)){showAlert("Enter a number");return}
+  var rl=await why("Changing low stock limit",true);if(rl===null)return;
   var rsl=await sb.from("settings").upsert({key:"low_stock_threshold",value:lv});
-  if(rsl.error)alert(rsl.error.message);else{await audit("low_stock","settings","low_stock_threshold",{to:lv,reason:rl});S.cfg.low=lv;toast("Saved")}}
+  if(rsl.error)showAlert(rsl.error.message);else{await audit("low_stock","settings","low_stock_threshold",{to:lv,reason:rl});S.cfg.low=lv;toast("Saved")}}
  else if(a==="asg"){
   var asP=S.partners.filter(function(x){return x.status==="approved"&&x.active});
-  if(!asP.length){alert("There is no approved partner. Add and approve one in More → Partners.");return}
-  var asK=prompt("Choose a partner (type the number):\n"+asP.map(function(x,i){return (i+1)+". "+x.name}).join("\n"));
-  if(asK===null)return;var asX=asP[parseInt(asK,10)-1];if(!asX){alert("Enter a valid number");return}
+  if(!asP.length){showAlert("There is no approved partner. Add and approve one in More → Partners.");return}
+  var asK=await ask("Choose a partner (type the number):\n"+asP.map(function(x,i){return (i+1)+". "+x.name}).join("\n"));
+  if(asK===null)return;var asX=asP[parseInt(asK,10)-1];if(!asX){showAlert("Enter a valid number");return}
   var asV=S.vehicles.filter(function(x){return x.partner_id===asX.id&&x.active}),asVid=null;
-  if(asV.length){var asVk=prompt("Choose a vehicle (type its number, leave empty to skip):\n"+asV.map(function(x,i){return (i+1)+". "+x.reg_no}).join("\n"));
-   if(asVk===null)return;if(asVk.trim()){var asVv=asV[parseInt(asVk,10)-1];if(!asVv){alert("Enter a valid number");return}asVid=asVv.id}}
+  if(asV.length){var asVk=await ask("Choose a vehicle (type its number, leave empty to skip):\n"+asV.map(function(x,i){return (i+1)+". "+x.reg_no}).join("\n"));
+   if(asVk===null)return;if(asVk.trim()){var asVv=asV[parseInt(asVk,10)-1];if(!asVv){showAlert("Enter a valid number");return}asVid=asVv.id}}
   var asR=await sb.rpc("assign_partner",{p_order:+id,p_partner:asX.id,p_vehicle:asVid,p_reason:"panel se assign"});
-  if(asR.error)alert(asR.error.message);else{toast("Partner assigned");await loadOrders()}}
+  if(asR.error)showAlert(asR.error.message);else{toast("Partner assigned");await loadOrders()}}
  else if(a==="padd"){
-  var pf=S.pf;if(!pf.name.trim()||!/^[6-9][0-9]{9}$/.test(pf.phone)){alert("Enter a name and a valid 10-digit number");return}
+  var pf=S.pf;if(!pf.name.trim()||!/^[6-9][0-9]{9}$/.test(pf.phone)){showAlert("Enter a name and a valid 10-digit number");return}
   var pr1=await sb.from("partners").insert({name:pf.name.trim(),phone:"91"+pf.phone,status:"pending"}).select("id").single();
-  if(pr1.error)alert(pr1.error.message.indexOf("partners_phone_uq")>-1?"This number is already added":pr1.error.message);
+  if(pr1.error)showAlert(pr1.error.message.indexOf("partners_phone_uq")>-1?"This number is already added":pr1.error.message);
   else{await audit("partner_added","partners",pr1.data.id,{name:pf.name.trim(),reason:"added from panel"});S.pf={name:"",phone:""};toast("Partner added. Now tap Approve");await loadPartners()}}
  else if(a==="pst"){
-  var ps=b.dataset.s,pp1=S.partners.find(function(x){return x.id==id}),pr2=why((ps==="approved"?"Approve":"Suspend")+" : "+pp1.name,true);if(pr2===null)return;
+  var ps=b.dataset.s,pp1=S.partners.find(function(x){return x.id==id}),pr2=await why((ps==="approved"?"Approve":"Suspend")+" : "+pp1.name,true);if(pr2===null)return;
   var pr3=await sb.from("partners").update({status:ps}).eq("id",id);
-  if(pr3.error)alert(pr3.error.message);else{await audit("partner_status","partners",id,{name:pp1.name,to:ps,reason:pr2});toast("Updated");await loadPartners()}}
+  if(pr3.error)showAlert(pr3.error.message);else{await audit("partner_status","partners",id,{name:pp1.name,to:ps,reason:pr2});toast("Updated");await loadPartners()}}
  else if(a==="vadd"){
-  var vp=S.partners.find(function(x){return x.id==id}),vr=prompt("Vehicle number (e.g. MH31AB1234)");if(!vr||!vr.trim())return;
-  var vt=prompt("Vehicle type (e.g. Tempo, Truck, Pickup)","Tempo");if(vt===null)return;
-  var vi=prompt("Insurance expiry date (YYYY-MM-DD), leave empty if unknown","");if(vi===null)return;
-  if(vi.trim()&&!/^\d{4}-\d{2}-\d{2}$/.test(vi.trim())){alert("Write the date like this: 2027-03-31");return}
+  var vp=S.partners.find(function(x){return x.id==id}),vr=await ask("Vehicle number (e.g. MH31AB1234)");if(!vr||!vr.trim())return;
+  var vt=await ask("Vehicle type (e.g. Tempo, Truck, Pickup)","Tempo");if(vt===null)return;
+  var vi=await ask("Insurance expiry date (YYYY-MM-DD), leave empty if unknown","");if(vi===null)return;
+  if(vi.trim()&&!/^\d{4}-\d{2}-\d{2}$/.test(vi.trim())){showAlert("Write the date like this: 2027-03-31");return}
   var vo=await sb.from("vehicles").insert({partner_id:+id,reg_no:vr.trim().toUpperCase().replace(/\s+/g,""),vtype:vt.trim(),insurance_expires:vi.trim()||null}).select("id").single();
-  if(vo.error)alert(vo.error.message);else{await audit("vehicle_added","vehicles",vo.data.id,{reg:vr.trim().toUpperCase(),partner:vp.name,reason:"added from panel"});toast("Vehicle added");await loadPartners()}}
+  if(vo.error)showAlert(vo.error.message);else{await audit("vehicle_added","vehicles",vo.data.id,{reg:vr.trim().toUpperCase(),partner:vp.name,reason:"added from panel"});toast("Vehicle added");await loadPartners()}}
  else if(a==="vst"){
-  var vx=S.vehicles.find(function(x){return x.id==id}),vw=why((vx.active?"Deactivating vehicle ":"Activating vehicle ")+vx.reg_no,true);if(vw===null)return;
+  var vx=S.vehicles.find(function(x){return x.id==id}),vw=await why((vx.active?"Deactivating vehicle ":"Activating vehicle ")+vx.reg_no,true);if(vw===null)return;
   var vy=await sb.from("vehicles").update({active:!vx.active}).eq("id",id);
-  if(vy.error)alert(vy.error.message);else{await audit("vehicle_status","vehicles",id,{reg:vx.reg_no,active:!vx.active,reason:vw});await loadPartners()}}
+  if(vy.error)showAlert(vy.error.message);else{await audit("vehicle_status","vehicles",id,{reg:vx.reg_no,active:!vx.active,reason:vw});await loadPartners()}}
  else if(a==="rate"){
-  var rz=S.zones.find(function(x){return x.id==id}),ro=S.rates.find(function(x){return x.zone_id==id}),rf=prompt("Fee kitni (₹) "+rz.name+"  for one order?",ro?ro.fee:"");
+  var rz=S.zones.find(function(x){return x.id==id}),ro=S.rates.find(function(x){return x.zone_id==id}),rf=await ask("Fee kitni (₹) "+rz.name+"  for one order?",ro?ro.fee:"");
   rf=parseFloat(rf);
-  if(rf>=0){var rw=why("Changing rate card",true);if(rw===null)return;
+  if(rf>=0){var rw=await why("Changing rate card",true);if(rw===null)return;
    var rr9=await sb.from("rate_card").upsert({zone_id:+id,fee:rf});
-   if(rr9.error)alert(rr9.error.message);else{await audit("rate_card","rate_card",id,{zone:rz.name,from:ro?Number(ro.fee):null,to:rf,reason:rw});toast("Fee save");await loadPartners()}}}
+   if(rr9.error)showAlert(rr9.error.message);else{await audit("rate_card","rate_card",id,{zone:rz.name,from:ro?Number(ro.fee):null,to:rf,reason:rw});toast("Fee save");await loadPartners()}}}
  else if(a==="vis"){
-  var v3=S.inv.find(function(x){return x.id==id});var rv=why(v3.active?"Hiding":"Showing",true);if(rv===null)return;
+  var v3=S.inv.find(function(x){return x.id==id});var rv=await why(v3.active?"Hiding":"Showing",true);if(rv===null)return;
   var r6=await sb.from("variants").update({active:!v3.active}).eq("id",id);
-  if(r6.error)alert(r6.error.message);else{await audit("visibility","variants",id,{active:!v3.active,reason:rv});await loadInv()}}
+  if(r6.error)showAlert(r6.error.message);else{await audit("visibility","variants",id,{active:!v3.active,reason:rv});await loadInv()}}
  render();window.scrollTo(0,y)});
 document.addEventListener("input",function(e){
  var i=e.target.id;
