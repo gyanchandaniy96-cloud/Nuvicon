@@ -39,7 +39,7 @@ nav button.on{color:var(--ink);box-shadow:inset 0 3px 0 var(--acc)}
 var U="https://ptbaxvqvwhgowflxzqmh.supabase.co",K="sb_publishable_QeRuu6oa6UKMuPTaIjgLcg_BuX-n2dI";
 var sb=window.supabase.createClient(U,K);
 var FLOW=["placed","staged","picked_up","in_transit","delivered"],LBL={placed:"Placed",staged:"Staged",picked_up:"Picked up",in_transit:"In transit",delivered:"Delivered",cancelled:"Cancelled"};
-var S={nf:{brand:"",name:"",cat:"",gst:"18",label:"",price:"",cost:""},pr:null,pper:"month",exps:[],costs:{},ef:{cat:"Salary",amt:"",note:""},credit:[],cf:{phone:"",sd:""},user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",partners:[],vehicles:[],rates:[],zones:[],pf:{name:"",phone:""},zonef:"",cfg:{onl:false,rzk:"",hours:[],force:false,low:20,city:"Pusad",gkey:"",godown:null,rad:30,dfee:0},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
+var S={nf:{brand:"",name:"",cat:"",gst:"18",label:"",price:"",cost:"",basis:"bag",kg:"",bt:false,kt:false},pr:null,pper:"month",exps:[],costs:{},ef:{cat:"Salary",amt:"",note:""},credit:[],cf:{phone:"",sd:""},user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",partners:[],vehicles:[],rates:[],zones:[],pf:{name:"",phone:""},zonef:"",cfg:{onl:false,rzk:"",hours:[],force:false,low:20,city:"Pusad",gkey:"",godown:null,rad:30,dfee:0,fbag:12,fqtl:60,fkm:35,fmin:100,ffree:5},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
 function esc(t){return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}
 function fmt(n){return "₹"+Math.round(Number(n)).toLocaleString("en-IN")}
 function toast(m){var t=document.getElementById("toast");t.innerHTML='<div class="toast">'+esc(m)+'</div>';setTimeout(function(){t.innerHTML=""},2500)}
@@ -57,7 +57,7 @@ async function loadOrders(){
  var r=await sb.from("orders").select("id,order_no,total,subtotal,gst_total,status,pay_status,pay_method,address,created_at,profiles(phone,full_name),zones(name),order_items(product_name,variant_label,qty,unit_price),partner_id,vehicle_id,partner_fee,cod_collected,partners(name,phone),vehicles(reg_no),area_text,delivery_lat,delivery_lng,distance_km").order("created_at",{ascending:false}).limit(200);
  if(r.error){S.loadErr=r.error.message}else{S.orders=r.data;S.loadErr=""}}
 async function loadInv(){
- var r=await sb.from("variants").select("id,label,price,active,product_id,products(brand,name,gst_percent,category),inventory(total,reserved)").order("product_id").order("id");
+ var r=await sb.from("variants").select("id,label,price,active,product_id,fee_basis,weight_kg,price_per_kg,products(brand,name,gst_percent,category),inventory(total,reserved)").order("product_id").order("id");
  if(r.error){S.loadErr=r.error.message}else{S.inv=r.data.map(function(v){v.inv=Array.isArray(v.inventory)?v.inventory[0]:v.inventory;return v})}}
 async function loadAll(){await Promise.all([loadOrders(),loadInv(),loadCfg(),loadPartners()])}
 function ordersV(){
@@ -99,9 +99,17 @@ function vKeys(v){
  var sz=normT(v.label.replace(/,/g," ")).split(/[^a-z0-9.x]+/).filter(function(w){return /\d/.test(w)});
  return {pt:pt,sz:sz}}
 function parseLines(lines,inv){
- var out=[];
+ var out=[],dm=lines.map(function(x){return typeof x==="string"?x:""}).join("\n").match(/discount\s*@?\s*(\d+(?:\.\d+)?)\s*%/i),disc=dm?parseFloat(dm[1]):0;
  lines.forEach(function(raw){
   var l=normT(raw.replace(/\s+/g," ").trim());if(l.length<4)return;
+  /* steel bill line: size in mm, bundles*pieces, weight in M.T., amount */
+  var s1=l.match(/\b(\d{1,2})mm\b/),s2=l.match(/(\d{1,3})\s*[*x×]\s*(\d{1,3})(?!\d)/),s3=l.match(/(\d{1,2}\.\d{3})\s*m/);
+  if(s1&&s2&&s3&&/bar|tmt|rod/.test(l)){
+   var mm=parseInt(s1[1],10),pcs=parseInt(s2[1],10)*parseInt(s2[2],10),kgw=parseFloat(s3[1])*1000,am=(l.match(/\d{1,3}(?:,\d{2,3})+\.\d{2}|\d{4,}\.\d{2}/g)||[]).map(function(x){return parseFloat(x.replace(/,/g,""))}),amt=am.length?am[am.length-1]:0;
+   var cands=inv.filter(function(v){var m=normT(v.label).match(/(\d{1,2})mm/);return v.fee_basis==="weight"&&m&&parseInt(m[1],10)===mm}),bv=null,bsc=-1;
+   cands.forEach(function(v){var sc=vKeys(v).pt.filter(function(w){return hasTok(l,w)}).length;if(sc>bsc){bsc=sc;bv=v}});
+   var cg=(amt>0&&kgw>0)?amt/kgw:0;if(!(cg>20&&cg<200))cg=0;
+   out.push({v:(bv&&bsc>0)?String(bv.id):"",q:String(pcs),c:cg?Math.round(cg*(1-disc/100)*100)/100:0,raw:raw.replace(/\s+/g," ").trim()});return}
   var best=null,bs=0;
   inv.forEach(function(v){
    var k=vKeys(v),pm=k.pt.filter(function(w){return hasTok(l,w)}).length,sm=k.sz.filter(function(w){return hasTok(l,w)}).length;
@@ -150,7 +158,7 @@ function billV(){
  (b.done&&!b.busy?'<h1 style="font-size:16px">Review: '+b.rows.length+' items mile</h1><small>'+esc(b.name)+'. Check every quantity against the bill and fix any that are wrong.</small>'+
   (b.rows.length?'':'<div class="empty">No items matched. Add them by hand with "+ Row" below.</div>')+
   b.rows.map(function(r,i){return '<div class="card"><select data-bi="'+i+'" data-f="v"><option value="">— skip —</option>'+S.inv.map(function(v){return '<option value="'+v.id+'"'+(String(v.id)===String(r.v)?' selected':'')+'>'+esc(v.products.brand+" "+v.products.name+" - "+v.label)+'</option>'}).join("")+'</select>'+
-   '<div class="flex"><input type="number" inputmode="numeric" min="0" data-bi="'+i+'" data-f="q" value="'+esc(r.q)+'" placeholder="Qty" style="width:110px;margin:0"><button class="btn bad sm" data-a="brm" data-id="'+i+'">Remove</button></div>'+(r.raw?'<small>Bill line: '+esc(r.raw)+'</small>':'')+'</div>'}).join("")+
+   '<div class="flex"><input type="number" inputmode="numeric" min="0" data-bi="'+i+'" data-f="q" value="'+esc(r.q)+'" placeholder="Qty" style="width:110px;margin:0"><button class="btn bad sm" data-a="brm" data-id="'+i+'">Remove</button></div>'+(r.c?'<br><small>Purchase rate '+'₹'+r.c+'/kg after discount</small>':'')+(r.raw?'<br><small>Bill line: '+esc(r.raw)+'</small>':'')+'</div>'}).join("")+(b.rows.some(function(r){return r.c})?'<label style="display:block;margin:8px 0"><input type="checkbox" id="billcost" style="width:auto"'+(b.cost===false?'':' checked')+'> Also update the cost price from this bill (rate per kg after discount, before GST)</label>':'')+
   '<div class="flex" style="margin-top:8px"><button class="btn ghost" data-a="baddrow">+ Row</button><button class="btn" data-a="bsave">Add to stock</button></div>':'')}
 
 function why(msg,req){var r=prompt(msg+"\nEnter a reason"+(req?" (zaroori)":" (optional)"));if(r===null)return null;r=r.trim();if(req&&!r){alert("A reason is required");return null}return r}
@@ -160,7 +168,7 @@ async function loadCfg(){
  var h=await sb.from("store_hours").select("day,is_open,opens,closes").order("day");
  var st=await sb.from("settings").select("key,value");
  if(h.data)S.cfg.hours=h.data;
- if(st.data)st.data.forEach(function(x){if(x.key==="force_closed")S.cfg.force=(x.value===true||x.value==="true");if(x.key==="low_stock_threshold")S.cfg.low=Number(x.value)||20;if(x.key==="city"&&x.value)S.cfg.city=String(x.value);if(x.key==="online_pay")S.cfg.onl=(x.value===true||x.value==="true");if(x.key==="rzp_key_id")S.cfg.rzk=x.value?String(x.value):"";if(x.key==="gmaps_key")S.cfg.gkey=x.value?String(x.value):"";if(x.key==="godown"&&x.value&&x.value.lat!=null)S.cfg.godown={lat:+x.value.lat,lng:+x.value.lng};if(x.key==="max_radius_km")S.cfg.rad=Number(x.value)||0;if(x.key==="default_partner_fee")S.cfg.dfee=Number(x.value)||0})}
+ if(st.data)st.data.forEach(function(x){if(x.key==="force_closed")S.cfg.force=(x.value===true||x.value==="true");if(x.key==="low_stock_threshold")S.cfg.low=Number(x.value)||20;if(x.key==="city"&&x.value)S.cfg.city=String(x.value);if(x.key==="online_pay")S.cfg.onl=(x.value===true||x.value==="true");if(x.key==="rzp_key_id")S.cfg.rzk=x.value?String(x.value):"";if(x.key==="gmaps_key")S.cfg.gkey=x.value?String(x.value):"";if(x.key==="godown"&&x.value&&x.value.lat!=null)S.cfg.godown={lat:+x.value.lat,lng:+x.value.lng};if(x.key==="max_radius_km")S.cfg.rad=Number(x.value)||0;if(x.key==="default_partner_fee")S.cfg.dfee=Number(x.value)||0;if(x.key==="fee_per_bag")S.cfg.fbag=Number(x.value)||0;if(x.key==="fee_per_quintal")S.cfg.fqtl=Number(x.value)||0;if(x.key==="fee_per_km")S.cfg.fkm=Number(x.value)||0;if(x.key==="fee_min")S.cfg.fmin=Number(x.value)||0;if(x.key==="fee_free_km")S.cfg.ffree=Number(x.value)||0})}
 async function loadStaff(){
  var p=await sb.from("profiles").select("id,full_name,phone,role").in("role",["staff","admin"]).order("created_at");
  var i=await sb.from("staff_invites").select("phone,role,full_name");
@@ -322,7 +330,8 @@ function partnersV(){
    (p.status!=="approved"?'<button class="btn sm" data-a="pst" data-id="'+p.id+'" data-s="approved">Approve</button>':'<button class="btn bad sm" data-a="pst" data-id="'+p.id+'" data-s="suspended">Suspend</button>')+'</div></div>'+
    vs.map(function(v){var exp=v.insurance_expires&&v.insurance_expires<today;return '<div class="flex" style="margin-top:8px"><div><b>'+esc(v.reg_no)+'</b> <small>'+esc(v.vtype||"")+(v.insurance_expires?', insurance '+esc(v.insurance_expires):'')+'</small> '+(exp?'<span class="pill out">Insurance expired</span>':'')+(v.active?'':'<span class="pill out">Off</span>')+'</div><button class="btn ghost sm" data-a="vst" data-id="'+v.id+'">'+(v.active?'Turn off':'Turn on')+'</button></div>'}).join("")+
    '<button class="btn ghost sm" data-a="vadd" data-id="'+p.id+'" style="margin-top:8px">+ Add vehicle</button></div>'}).join("")+
- '<div class="card flex" style="margin-top:12px"><div><b>Default fee</b><br><small>For map-pin orders (no zone): '+fmt(S.cfg.dfee)+'</small></div><button class="btn sm" data-a="dfee">Change</button></div><h1 style="font-size:16px">Rate card (fee paid to the partner)</h1><small>Fee per order for each zone. This fee is applied when an order is assigned.</small><div style="margin-top:8px"></div>'+
+ '<div class="card" style="margin-top:12px"><b>Automatic delivery fee</b><br><small>Fee = bags × bag rate + quintals × quintal rate + (km beyond the included distance) × km rate. Minimum fee applies to every order.</small>'+[["fbag","Per bag (cement)",S.cfg.fbag],["fqtl","Per quintal (steel etc.)",S.cfg.fqtl],["ffree","Distance included (km)",S.cfg.ffree,1],["fkm","Per km beyond that",S.cfg.fkm],["fmin","Minimum fee per order",S.cfg.fmin]].map(function(r){return '<div class="flex" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>'+r[1]+': <b>'+(r[3]?r[2]+' km':fmt(r[2]))+'</b></span><button class="btn sm" data-a="frate" data-id="'+r[0]+'">Change</button></div>'}).join("")+'</div>'+
+ '<div class="card flex" style="margin-top:12px"><div><b>Default fee</b><br><small>Used only when an order has no distance: '+fmt(S.cfg.dfee)+'</small></div><button class="btn sm" data-a="dfee">Change</button></div><h1 style="font-size:16px">Rate card (fee paid to the partner)</h1><small>Used only when an order has no distance (zone orders). Orders with a distance use the automatic fee above.</small><div style="margin-top:8px"></div>'+
  S.zones.filter(function(z){return z.active}).map(function(z){var r=rate(z.id);return '<div class="card flex"><div><b>'+esc(z.name)+'</b><br><small>'+(r==null?'Fee not set':fmt(r))+'</small></div><button class="btn sm" data-a="rate" data-id="'+z.id+'">'+(r==null?'Set':'Change')+'</button></div>'}).join("")}
 function viewHtml(){var v=S.view;
  if((v==="staff"||v==="settings"||v==="partners"||v==="credit"||v==="profit"||v==="costs")&&S.role!=="admin")v="more";
@@ -335,19 +344,25 @@ function stockV(){
  return '<h1>Inventory</h1><small>'+S.inv.length+' variants, '+low+' low or out</small><div class="flex" style="margin:8px 0"><button class="btn sm" data-a="go" data-id="bulk">Bulk update</button><button class="btn sm" data-a="go" data-id="bill">Upload bill</button></div><input id="q" placeholder="Search product or size" value="'+esc(S.q)+'">'+
  (vs.length?vs.map(function(v){var t=stk(v),i=v.inv||{total:0,reserved:0};
   return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+'</small><br><span class="pill '+t[0]+'">'+t[1]+'</span> <small>Available <b>'+(i.total-i.reserved)+'</b>, total '+i.total+', reserved '+i.reserved+'</small></div><button class="btn sm" data-a="recv" data-id="'+v.id+'">+ Receive</button></div>'}).join(""):'<div class="empty">Nothing matches.</div>')}
+var ROD={20:30.5,16:18.8,12:10.2,10:7,8:4.55,6:3.1};
+function nfAuto(){
+ var f=S.nf,txt=(f.cat+" "+f.name+" "+f.label+" "+f.brand).toLowerCase();
+ var steel=/steel|tmt|rod|\bbar\b|saria|sariya/.test(txt),m=f.label.match(/(\d+(?:\.\d+)?)\s*mm/i);
+ if(steel&&!f.bt)f.basis="weight";
+ if(f.basis==="weight"&&m&&ROD[+m[1]]&&!f.kt)f.kg=String(ROD[+m[1]])}
 function addItemForm(){
  var f=S.nf,cats=[];S.inv.forEach(function(v){if(cats.indexOf(v.products.category)<0)cats.push(v.products.category)});
  ["Cement","Steel","Sand","Bricks","Aggregate","Other"].forEach(function(c){if(cats.map(function(x){return x.toLowerCase()}).indexOf(c.toLowerCase())<0)cats.push(c)});
- return '<div class="card"><b>Add an item</b><br><small>New items start with stock 0 and stay hidden from customers until stock is added (Inventory → Upload bill). To add another size of an existing item, use the same brand and name.</small>'+
- '<input data-nf="brand" placeholder="Brand (e.g. Dalmia)" value="'+esc(f.brand)+'" style="margin-top:8px"><input data-nf="name" placeholder="Item name (e.g. DSP Cement)" value="'+esc(f.name)+'">'+
+ return '<div class="card"><b>Add an item</b><br><small>New items start with stock 0 and stay hidden from customers until stock is added (Inventory → Upload bill). To add another size of an existing item, use exactly the same name.</small>'+
+ '<input data-nf="name" placeholder="Item name with brand (e.g. Dalmia DSP Cement)" value="'+esc(f.name)+'" style="margin-top:8px">'+
  '<input data-nf="cat" list="catlist" placeholder="Category (e.g. Cement)" value="'+esc(f.cat)+'"><datalist id="catlist">'+cats.map(function(c){return '<option value="'+esc(c)+'">'}).join("")+'</datalist>'+
  '<select data-nf="gst">'+["0","5","12","18","28"].map(function(g){return '<option value="'+g+'"'+(f.gst===g?' selected':'')+'>GST '+g+'%</option>'}).join("")+'</select>'+
- '<input data-nf="label" placeholder="Size / pack (e.g. 50 kg bag)" value="'+esc(f.label)+'"><input data-nf="price" type="number" inputmode="decimal" placeholder="Selling price before GST (₹)" value="'+esc(f.price)+'"><input data-nf="cost" type="number" inputmode="decimal" placeholder="Your cost price before GST (₹, optional)" value="'+esc(f.cost)+'">'+
+ '<input data-nf="label" placeholder="Size / pack (e.g. 50 kg bag)" value="'+esc(f.label)+'"><select data-nf="basis"><option value="bag"'+(f.basis==="bag"?' selected':'')+'>Partner fee: per bag (cement)</option><option value="weight"'+(f.basis==="weight"?' selected':'')+'>Partner fee: by weight (steel etc.)</option></select>'+(f.basis==="weight"?'<input data-nf="kg" type="number" inputmode="decimal" placeholder="Weight of one unit (kg)" value="'+esc(f.kg)+'"><small>Rod weights filled automatically from the size: 6 mm 3.1, 8 mm 4.55, 10 mm 7, 12 mm 10.2, 16 mm 18.8, 20 mm 30.5 kg. You can change the number.</small>':'')+'<input data-nf="price" type="number" inputmode="decimal" placeholder="'+(f.basis==="weight"?'Selling rate per kg before GST (₹)':'Selling price before GST (₹)')+'" value="'+esc(f.price)+'"><input data-nf="cost" type="number" inputmode="decimal" placeholder="'+(f.basis==="weight"?'Your purchase rate per kg (₹, optional)':'Your cost price before GST (₹, optional)')+'" value="'+esc(f.cost)+'">'+(f.basis==="weight"&&Number(f.price)>0&&Number(f.kg)>0?'<small>One rod will be priced at '+fmt(Number(f.price)*Number(f.kg))+' (before GST).</small>':'')+
  '<button class="btn" data-a="nadd">Add item</button></div>'}
 function catV(){
  var s=S.q.toLowerCase(),vs=S.inv.filter(function(v){return (v.products.brand+" "+v.products.name+" "+v.label).toLowerCase().indexOf(s)>-1});
  return '<h1>Catalog</h1>'+(S.role==="admin"?addItemForm():'')+(S.inv.length?'':'<div class="empty">No items yet. Add your first item above.</div>')+'<input id="q" placeholder="Search product or size" value="'+esc(S.q)+'">'+
- vs.map(function(v){return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', GST '+Number(v.products.gst_percent)+'%</small><br><b>'+fmt(v.price)+'</b> '+(v.active?'':'<span class="pill out">Hidden</span>')+'</div>'+(S.role==="admin"?'<div><button class="btn sm" data-a="price" data-id="'+v.id+'">Price</button> <button class="btn sm" data-a="gst" data-id="'+v.id+'">GST</button> <button class="btn ghost sm" data-a="vis" data-id="'+v.id+'">'+(v.active?'Hide':'Show')+'</button></div>':"")+'</div>'}).join("")}
+ vs.map(function(v){return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', GST '+Number(v.products.gst_percent)+'%'+(v.fee_basis==="weight"&&v.weight_kg?', '+Number(v.weight_kg)+' kg per piece'+(v.price_per_kg!=null?', '+fmt(v.price_per_kg)+'/kg':''):'')+'</small><br><b>'+fmt(v.price)+'</b> '+(v.active?'':'<span class="pill out">Hidden</span>')+'</div>'+(S.role==="admin"?'<div><button class="btn sm" data-a="'+(v.fee_basis==="weight"&&v.weight_kg?'kgrate':'price')+'" data-id="'+v.id+'">'+(v.fee_basis==="weight"&&v.weight_kg?'Rate/kg':'Price')+'</button> <button class="btn sm" data-a="gst" data-id="'+v.id+'">GST</button> <button class="btn ghost sm" data-a="vis" data-id="'+v.id+'">'+(v.active?'Hide':'Show')+'</button></div>':"")+'</div>'}).join("")}
 function loginV(){
  return '<main><h1 style="margin-top:60px">Nuvicon Ops</h1><p class="mut">Staff login</p>'+
  (S.step==="phone"?'<input id="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" value="'+esc(S.phone)+'"><button class="btn" data-a="send"'+(S.busy?' disabled':'')+'>Send code</button>':
@@ -386,6 +401,21 @@ document.addEventListener("click",async function(e){
   if(q>0){var rr=why("Stock receive",false);if(rr===null)return;var tot=(v.inv?v.inv.total:0)+q;
    var r4=await sb.from("inventory").upsert({variant_id:+id,total:tot,last_received:new Date().toISOString().slice(0,10)});
    if(r4.error)alert(r4.error.message);else{await audit("stock_received","inventory",id,{qty:q,total:tot,reason:rr});toast("Stock updated");await loadInv()}}}
+ else if(a==="kgrate"){
+  var kv=S.inv.find(function(x){return x.id==id}),sibs=S.inv.filter(function(x){return x.product_id===kv.product_id&&x.fee_basis==="weight"&&Number(x.weight_kg)>0});
+  var kr=prompt("New SELLING rate per kg (₹, before GST).\nThis updates all "+sibs.length+" sizes of "+kv.products.brand+" "+kv.products.name+".",kv.price_per_kg==null?"":kv.price_per_kg);if(kr===null)return;
+  kr=parseFloat(kr);if(!(kr>0)){alert("Invalid rate");return}
+  var kc=prompt("Your PURCHASE rate per kg (₹, before GST). Leave empty to keep the old cost.","");if(kc===null)return;
+  var kcn=kc.trim()===""?null:parseFloat(kc);if(kcn!==null&&!(kcn>=0)){alert("Invalid purchase rate");return}
+  var kw=why("Changing steel rate to "+kr+" per kg",true);if(kw===null)return;
+  var bad=0;
+  for(var ki=0;ki<sibs.length;ki++){var sv=sibs[ki],np2=Math.round(kr*Number(sv.weight_kg)*100)/100;
+   var ku=await sb.from("variants").update({price:np2,price_per_kg:kr}).eq("id",sv.id);
+   if(ku.error){bad++;continue}
+   await audit("price_change","variants",sv.id,{from:sv.price,to:np2,reason:kw});
+   if(kcn!==null){var kk=await sb.rpc("set_variant_cost",{p_variant:sv.id,p_cost:Math.round(kcn*Number(sv.weight_kg)*100)/100,p_reason:kw});if(kk.error)bad++}}
+  if(bad)alert("Some sizes could not be updated ("+bad+"). Please check and try again.");else toast("Updated "+sibs.length+" sizes");
+  await loadInv()}
  else if(a==="price"){
   var v2=S.inv.find(function(x){return x.id==id}),p=prompt("New price for "+v2.products.name+" ("+v2.label+"), before GST",v2.price);
   p=parseFloat(p);
@@ -415,7 +445,8 @@ document.addEventListener("click",async function(e){
   var rows2=[],det2=[];
   ks.forEach(function(k){var vv=S.inv.find(function(z){return z.id==k}),cur=vv.inv?vv.inv.total:0;rows2.push({variant_id:+k,total:cur+agg[k],last_received:new Date().toISOString().slice(0,10)});det2.push({v:+k,qty:agg[k]})});
   var rs=await sb.from("inventory").upsert(rows2);
-  if(rs.error)alert(rs.error.message);else{await audit("bill_stock","inventory","bill",{file:S.bill.name,items:det2,reason:rbl});S.bill={busy:false,msg:"",name:"",rows:[],err:"",done:false};toast("Stock updated");await loadInv();S.view="stock"}}
+  if(rs.error)alert(rs.error.message);else{await audit("bill_stock","inventory","bill",{file:S.bill.name,items:det2,reason:rbl});var cmsg="";if(S.bill.cost!==false){var cn=0;for(var ci=0;ci<S.bill.rows.length;ci++){var cr5=S.bill.rows[ci],cv5=cr5.v&&S.inv.find(function(z){return String(z.id)===String(cr5.v)});if(cr5.c&&cv5&&Number(cv5.weight_kg)>0){var cx=await sb.rpc("set_variant_cost",{p_variant:cv5.id,p_cost:Math.round(cr5.c*Number(cv5.weight_kg)*100)/100,p_reason:"from bill"});if(!cx.error)cn++}}if(cn)cmsg=", cost updated for "+cn}
+   S.bill={busy:false,msg:"",name:"",rows:[],err:"",done:false};toast("Stock updated"+cmsg);await loadInv();S.view="stock"}}
  else if(a==="gst"){
   var v4=S.inv.find(function(x){return x.id==id}),g=prompt("GST % for "+v4.products.brand+" "+v4.products.name+" (sab sizes par lagega). 0, 5, 12, 18 ya 28",v4.products.gst_percent);
   if(g!==null){g=parseFloat(g);
@@ -485,18 +516,20 @@ document.addEventListener("click",async function(e){
    dlCsv("nuvicon_credit_payments_"+nm+".csv",[["Date","Customer","Phone","Amount","Note"]].concat((xc.data||[]).map(function(x){var pf=x.profiles||{};return [ist(x.created_at),pf.full_name||"",pf.phone||"",x.amount,x.note||""]})))}}
  else if(a==="nadd"){
   var nf=S.nf,nb=nf.brand.trim(),nn=nf.name.trim(),nc=nf.cat.trim(),nl=nf.label.trim(),np=Number(nf.price),ng=Number(nf.gst);
-  if(!nb||!nn||!nc||!nl){alert("Fill brand, item name, category and size");return}
+  if(!nn||!nc||!nl){alert("Fill item name, category and size");return}
   if(!(np>0)){alert("Enter a valid selling price");return}
   if(nf.cost!==""&&!(Number(nf.cost)>=0)){alert("Invalid cost price");return}
+  if(nf.basis==="weight"&&!(Number(nf.kg)>0)){alert("Enter the weight of one unit in kg");return}
   var ex=S.inv.find(function(v){return v.products.brand.toLowerCase()===nb.toLowerCase()&&v.products.name.toLowerCase()===nn.toLowerCase()}),pid;
   if(ex){pid=ex.product_id;if(S.inv.some(function(v){return v.product_id===pid&&v.label.toLowerCase()===nl.toLowerCase()})){alert("This size already exists for this item");return}}
   else{var pi=await sb.from("products").insert({brand:nb,name:nn,category:nc,gst_percent:ng}).select("id").single();if(pi.error){alert(pi.error.message);return}pid=pi.data.id}
-  var vi2=await sb.from("variants").insert({product_id:pid,label:nl,price:np}).select("id").single();
+  var wt=nf.basis==="weight",kgv=Number(nf.kg),pr0=wt?Math.round(np*kgv*100)/100:np;
+  var vi2=await sb.from("variants").insert({product_id:pid,label:nl,price:pr0,fee_basis:nf.basis,weight_kg:wt?kgv:null,price_per_kg:wt?np:null}).select("id").single();
   if(vi2.error){alert(vi2.error.message);return}
   var ii=await sb.from("inventory").insert({variant_id:vi2.data.id,total:0});if(ii.error){alert(ii.error.message);return}
-  if(nf.cost!==""){var cc=await sb.rpc("set_variant_cost",{p_variant:vi2.data.id,p_cost:Number(nf.cost),p_reason:"new item"});if(cc.error)alert("Item added, but cost was not saved: "+cc.error.message)}
-  await audit("item_added","variants",vi2.data.id,{name:nb+" "+nn,label:nl,price:np,gst:ng,category:nc});
-  S.nf={brand:"",name:"",cat:nc,gst:nf.gst,label:"",price:"",cost:""};toast("Item added");await loadInv()}
+  if(nf.cost!==""){var cc=await sb.rpc("set_variant_cost",{p_variant:vi2.data.id,p_cost:wt?Math.round(Number(nf.cost)*kgv*100)/100:Number(nf.cost),p_reason:"new item"});if(cc.error)alert("Item added, but cost was not saved: "+cc.error.message)}
+  await audit("item_added","variants",vi2.data.id,{name:nb+" "+nn,label:nl,price:pr0,gst:ng,category:nc});
+  S.nf={brand:"",name:"",cat:nc,gst:nf.gst,label:"",price:"",cost:"",basis:"bag",kg:"",bt:false,kt:false};toast("Item added");await loadInv()}
  else if(a==="pper"){S.pper=id;await loadProfit()}
  else if(a==="eadd"){
   var ea=S.ef,am2=Number(ea.amt);if(!(am2>0)){alert("Enter a valid amount");return}
@@ -541,6 +574,12 @@ document.addEventListener("click",async function(e){
   var rw2=why("Changing max delivery distance",true);if(rw2===null)return;
   var rr7=await sb.from("settings").upsert({key:"max_radius_km",value:rv});
   if(rr7.error)alert(rr7.error.message);else{await audit("store_setting","settings","max_radius_km",{km:rv,reason:rw2});S.cfg.rad=rv;toast("Saved")}}
+ else if(a==="frate"){
+  var FK={fbag:["fee_per_bag","Rate per bag (₹)"],fqtl:["fee_per_quintal","Rate per quintal (₹)"],fkm:["fee_per_km","Rate per km beyond the included distance (₹)"],ffree:["fee_free_km","Distance included in the base fee (km)"],fmin:["fee_min","Minimum fee per order (₹)"]}[id];
+  var fv=prompt(FK[1],S.cfg[id]);if(fv===null)return;fv=parseFloat(fv);if(!(fv>=0)){alert("Invalid amount");return}
+  var fw=why("Changing "+FK[1],true);if(fw===null)return;
+  var fr=await sb.from("settings").upsert({key:FK[0],value:fv});
+  if(fr.error)alert(fr.error.message);else{await audit("store_setting","settings",FK[0],{fee:fv,reason:fw});S.cfg[id]=fv;toast("Saved")}}
  else if(a==="dfee"){
   var df=prompt("Default partner fee (₹) when the order has no zone (map-pin orders)",S.cfg.dfee);df=parseFloat(df);
   if(df>=0){var dw=why("Changing default fee",true);if(dw===null)return;
@@ -619,13 +658,16 @@ document.addEventListener("input",function(e){
  else if(e.target.dataset.bulk){S.bulk.vals[e.target.dataset.bulk]=e.target.value}
  else if(e.target.dataset.bi!=null&&e.target.dataset.f==="q"){S.bill.rows[+e.target.dataset.bi].q=e.target.value}
  else if(e.target.dataset.zf){S.zonef=e.target.value}
- else if(e.target.dataset.nf){S.nf[e.target.dataset.nf]=e.target.value}
+ else if(e.target.dataset.nf){S.nf[e.target.dataset.nf]=e.target.value;if(e.target.dataset.nf==="kg")S.nf.kt=true}
  else if(e.target.dataset.ef){S.ef[e.target.dataset.ef]=e.target.value}
  else if(e.target.dataset.cf){var cv=e.target.value;if(e.target.dataset.cf==="phone")cv=cv.replace(/\D/g,"");S.cf[e.target.dataset.cf]=cv}
  else if(e.target.dataset.pf){var pv=e.target.value;if(e.target.dataset.pf==="phone")pv=pv.replace(/\D/g,"");S.pf[e.target.dataset.pf]=pv}
  else if(e.target.dataset.sf){var sv=e.target.value;if(e.target.dataset.sf==="phone")sv=sv.replace(/\D/g,"");S.sf[e.target.dataset.sf]=sv}
  else if(e.target.dataset.af==="q"){S.af.q=e.target.value;var ps=e.target.selectionStart;render();var ea=document.getElementById("aq");if(ea){ea.focus();ea.setSelectionRange(ps,ps)}}});
 document.addEventListener("change",function(e){var t=e.target;
+ if(t.dataset&&t.dataset.nf==="basis"){S.nf.basis=t.value;S.nf.bt=true;nfAuto();render();return}
+ if(t.dataset&&(t.dataset.nf==="cat"||t.dataset.nf==="name"||t.dataset.nf==="label"||t.dataset.nf==="brand")){S.nf[t.dataset.nf]=t.value;nfAuto();render();return}
+ if(t.id==="billcost"){S.bill.cost=t.checked;return}
  if(t.id==="billfile"&&t.files&&t.files[0])processBill(t.files[0]);
  else if(t.dataset&&t.dataset.bi!=null&&t.dataset.f==="v")S.bill.rows[+t.dataset.bi].v=t.value;
  else if(t.dataset&&t.dataset.sh!=null){var hh=S.cfg.hours.find(function(x){return String(x.day)===t.dataset.sh});if(hh){if(t.dataset.f==="open")hh.is_open=t.checked;else hh[t.dataset.f]=t.value}}
