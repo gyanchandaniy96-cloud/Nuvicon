@@ -43,7 +43,7 @@ var S={nf:{brand:"",name:"",cat:"",gst:"18",label:"",price:"",cost:"",basis:"bag
 function esc(t){return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}
 function fmt(n){n=Math.round(Number(n)*100)/100;return "₹"+n.toLocaleString("en-IN",{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2})}
 function gi(g){return 1+Number(g)/100}
-function r4(x){return Math.round(x*10000)/10000}
+function rnd4(x){return Math.round(x*10000)/10000}
 function toast(m){var t=document.getElementById("toast");t.innerHTML='<div class="toast">'+esc(m)+'</div>';setTimeout(function(){t.innerHTML=""},2500)}
 function dt(s){return new Date(s).toLocaleString("en-IN",{timeZone:"Asia/Kolkata",day:"numeric",month:"short",hour:"numeric",minute:"2-digit"})}
 async function audit(a,e,id,d){try{await sb.rpc("log_audit",{p_action:a,p_entity:e,p_id:String(id),p_details:d})}catch(x){}}
@@ -422,12 +422,12 @@ document.addEventListener("click",async function(e){
  else if(a==="kgrate"){
   var kv=S.inv.find(function(x){return x.id==id}),sibs=S.inv.filter(function(x){return x.product_id===kv.product_id&&x.fee_basis==="weight"&&Number(x.weight_kg)>0});
   var kr=await ask("New SELLING rate per kg INCLUDING GST (₹).\nThis updates all "+sibs.length+" sizes of "+kv.products.brand+" "+kv.products.name+".",kv.price_per_kg==null?"":Math.round(kv.price_per_kg*gi(kv.products.gst_percent)*100)/100);if(kr===null)return;
-  kr=parseFloat(kr);if(!(kr>0)){showAlert("Invalid rate");return}var krx=r4(kr/gi(kv.products.gst_percent));
+  kr=parseFloat(kr);if(!(kr>0)){showAlert("Invalid rate");return}var krx=rnd4(kr/gi(kv.products.gst_percent));
   var kc=await ask("Your PURCHASE rate per kg (₹, before GST). Leave empty to keep the old cost.","");if(kc===null)return;
   var kcn=kc.trim()===""?null:parseFloat(kc);if(kcn!==null&&!(kcn>=0)){showAlert("Invalid purchase rate");return}
   var kw=await why("Changing steel rate to "+kr+" per kg",true);if(kw===null)return;
   var bad=0;
-  for(var ki=0;ki<sibs.length;ki++){var sv=sibs[ki],np2=r4(krx*Number(sv.weight_kg));
+  for(var ki=0;ki<sibs.length;ki++){var sv=sibs[ki],np2=rnd4(krx*Number(sv.weight_kg));
    var ku=await sb.from("variants").update({price:np2,price_per_kg:krx}).eq("id",sv.id);
    if(ku.error){bad++;continue}
    await audit("price_change","variants",sv.id,{from:sv.price,to:np2,reason:kw});
@@ -436,7 +436,7 @@ document.addEventListener("click",async function(e){
   await loadInv()}
  else if(a==="price"){
   var v2=S.inv.find(function(x){return x.id==id}),p=await ask("New price for "+v2.products.name+" ("+v2.label+") INCLUDING GST (₹)",Math.round(v2.price*gi(v2.products.gst_percent)*100)/100);
-  p=parseFloat(p);if(p>=0)p=r4(p/gi(v2.products.gst_percent));
+  p=parseFloat(p);if(p>=0)p=rnd4(p/gi(v2.products.gst_percent));
   if(p>=0){var rp=await why("Changing price",true);if(rp===null)return;var r5=await sb.from("variants").update({price:p}).eq("id",id);
    if(r5.error)showAlert(r5.error.message);else{await audit("price_change","variants",id,{from:v2.price,to:p,reason:rp});toast("Price updated");await loadInv()}}}
  else if(a==="bmode")S.bulk.mode=id;
@@ -541,7 +541,7 @@ document.addEventListener("click",async function(e){
   var ex=S.inv.find(function(v){return v.products.brand.toLowerCase()===nb.toLowerCase()&&v.products.name.toLowerCase()===nn.toLowerCase()}),pid;
   if(ex){pid=ex.product_id;if(S.inv.some(function(v){return v.product_id===pid&&v.label.toLowerCase()===nl.toLowerCase()})){showAlert("This size already exists for this item");return}}
   else{var pi=await sb.from("products").insert({brand:nb,name:nn,category:nc,gst_percent:ng}).select("id").single();if(pi.error){showAlert(pi.error.message);return}pid=pi.data.id}
-  var wt=nf.basis==="weight",kgv=Number(nf.kg),exv=r4(np/gi(ng)),pr0=wt?r4(exv*kgv):exv;
+  var wt=nf.basis==="weight",kgv=Number(nf.kg),exv=rnd4(np/gi(ng)),pr0=wt?rnd4(exv*kgv):exv;
   var vi2=await sb.from("variants").insert({product_id:pid,label:nl,price:pr0,fee_basis:nf.basis,weight_kg:wt?kgv:null,price_per_kg:wt?exv:null}).select("id").single();
   if(vi2.error){showAlert(vi2.error.message);return}
   var ii=await sb.from("inventory").insert({variant_id:vi2.data.id,total:0});if(ii.error){showAlert(ii.error.message);return}
