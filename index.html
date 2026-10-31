@@ -41,7 +41,9 @@ var sb=window.supabase.createClient(U,K);
 var FLOW=["placed","staged","picked_up","in_transit","delivered"],LBL={placed:"Placed",staged:"Staged",picked_up:"Picked up",in_transit:"In transit",delivered:"Delivered",cancelled:"Cancelled"};
 var S={nf:{brand:"",name:"",cat:"",gst:"18",label:"",price:"",cost:"",basis:"bag",kg:"",bt:false,kt:false},pr:null,pper:"month",exps:[],costs:{},ef:{cat:"Salary",amt:"",note:""},credit:[],cf:{phone:"",sd:""},user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",partners:[],vehicles:[],rates:[],zones:[],pf:{name:"",phone:""},zonef:"",cfg:{onl:false,rzk:"",hours:[],force:false,low:20,city:"Pusad",gkey:"",godown:null,rad:30,dfee:0,fbag:12,fqtl:60,fkm:35,fmin:100,ffree:5},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
 function esc(t){return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}
-function fmt(n){return "₹"+Math.round(Number(n)).toLocaleString("en-IN")}
+function fmt(n){n=Math.round(Number(n)*100)/100;return "₹"+n.toLocaleString("en-IN",{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2})}
+function gi(g){return 1+Number(g)/100}
+function r4(x){return Math.round(x*10000)/10000}
 function toast(m){var t=document.getElementById("toast");t.innerHTML='<div class="toast">'+esc(m)+'</div>';setTimeout(function(){t.innerHTML=""},2500)}
 function dt(s){return new Date(s).toLocaleString("en-IN",{timeZone:"Asia/Kolkata",day:"numeric",month:"short",hour:"numeric",minute:"2-digit"})}
 async function audit(a,e,id,d){try{await sb.rpc("log_audit",{p_action:a,p_entity:e,p_id:String(id),p_details:d})}catch(x){}}
@@ -357,12 +359,12 @@ function addItemForm(){
  '<input data-nf="name" placeholder="Item name with brand (e.g. Dalmia DSP Cement)" value="'+esc(f.name)+'" style="margin-top:8px">'+
  '<input data-nf="cat" list="catlist" placeholder="Category (e.g. Cement)" value="'+esc(f.cat)+'"><datalist id="catlist">'+cats.map(function(c){return '<option value="'+esc(c)+'">'}).join("")+'</datalist>'+
  '<select data-nf="gst">'+["0","5","12","18","28"].map(function(g){return '<option value="'+g+'"'+(f.gst===g?' selected':'')+'>GST '+g+'%</option>'}).join("")+'</select>'+
- '<input data-nf="label" placeholder="Size / pack (e.g. 50 kg bag)" value="'+esc(f.label)+'"><select data-nf="basis"><option value="bag"'+(f.basis==="bag"?' selected':'')+'>Partner fee: per bag (cement)</option><option value="weight"'+(f.basis==="weight"?' selected':'')+'>Partner fee: by weight (steel etc.)</option></select>'+(f.basis==="weight"?'<input data-nf="kg" type="number" inputmode="decimal" placeholder="Weight of one unit (kg)" value="'+esc(f.kg)+'"><small>Rod weights filled automatically from the size: 6 mm 3.1, 8 mm 4.55, 10 mm 7, 12 mm 10.2, 16 mm 18.8, 20 mm 30.5 kg. You can change the number.</small>':'')+'<input data-nf="price" type="number" inputmode="decimal" placeholder="'+(f.basis==="weight"?'Selling rate per kg before GST (₹)':'Selling price before GST (₹)')+'" value="'+esc(f.price)+'"><input data-nf="cost" type="number" inputmode="decimal" placeholder="'+(f.basis==="weight"?'Your purchase rate per kg (₹, optional)':'Your cost price before GST (₹, optional)')+'" value="'+esc(f.cost)+'">'+(f.basis==="weight"&&Number(f.price)>0&&Number(f.kg)>0?'<small>One rod will be priced at '+fmt(Number(f.price)*Number(f.kg))+' (before GST).</small>':'')+
+ '<input data-nf="label" placeholder="Size / pack (e.g. 50 kg bag)" value="'+esc(f.label)+'"><select data-nf="basis"><option value="bag"'+(f.basis==="bag"?' selected':'')+'>Partner fee: per bag (cement)</option><option value="weight"'+(f.basis==="weight"?' selected':'')+'>Partner fee: by weight (steel etc.)</option></select>'+(f.basis==="weight"?'<input data-nf="kg" type="number" inputmode="decimal" placeholder="Weight of one unit (kg)" value="'+esc(f.kg)+'"><small>Rod weights filled automatically from the size: 6 mm 3.1, 8 mm 4.55, 10 mm 7, 12 mm 10.2, 16 mm 18.8, 20 mm 30.5 kg. You can change the number.</small>':'')+'<input data-nf="price" type="number" inputmode="decimal" placeholder="'+(f.basis==="weight"?'Selling rate per kg INCLUDING GST (₹)':'Selling price INCLUDING GST (₹)')+'" value="'+esc(f.price)+'"><input data-nf="cost" type="number" inputmode="decimal" placeholder="'+(f.basis==="weight"?'Your purchase rate per kg, before GST (₹, optional)':'Your cost price, before GST (₹, optional)')+'" value="'+esc(f.cost)+'">'+(f.basis==="weight"&&Number(f.price)>0&&Number(f.kg)>0?'<small>One rod will be priced at '+fmt(Number(f.price)*Number(f.kg))+' including GST.</small>':'')+
  '<button class="btn" data-a="nadd">Add item</button></div>'}
 function catV(){
  var s=S.q.toLowerCase(),vs=S.inv.filter(function(v){return (v.products.brand+" "+v.products.name+" "+v.label).toLowerCase().indexOf(s)>-1});
  return '<h1>Catalog</h1>'+(S.role==="admin"?addItemForm():'')+(S.inv.length?'':'<div class="empty">No items yet. Add your first item above.</div>')+'<input id="q" placeholder="Search product or size" value="'+esc(S.q)+'">'+
- vs.map(function(v){return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', GST '+Number(v.products.gst_percent)+'%'+(v.fee_basis==="weight"&&v.weight_kg?', '+Number(v.weight_kg)+' kg per piece'+(v.price_per_kg!=null?', '+fmt(v.price_per_kg)+'/kg':''):'')+'</small><br><b>'+fmt(v.price)+'</b> '+(v.active?'':'<span class="pill out">Hidden</span>')+'</div>'+(S.role==="admin"?'<div><button class="btn sm" data-a="'+(v.fee_basis==="weight"&&v.weight_kg?'kgrate':'price')+'" data-id="'+v.id+'">'+(v.fee_basis==="weight"&&v.weight_kg?'Rate/kg':'Price')+'</button> <button class="btn sm" data-a="gst" data-id="'+v.id+'">GST</button> <button class="btn ghost sm" data-a="vis" data-id="'+v.id+'">'+(v.active?'Hide':'Show')+'</button></div>':"")+'</div>'}).join("")}
+ vs.map(function(v){return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', GST '+Number(v.products.gst_percent)+'%'+(v.fee_basis==="weight"&&v.weight_kg?', '+Number(v.weight_kg)+' kg per piece'+(v.price_per_kg!=null?', '+fmt(v.price_per_kg*gi(v.products.gst_percent))+'/kg':''):'')+'</small><br><b>'+fmt(v.price*gi(v.products.gst_percent))+'</b> <small>incl. GST</small> '+(v.active?'':'<span class="pill out">Hidden</span>')+'</div>'+(S.role==="admin"?'<div><button class="btn sm" data-a="'+(v.fee_basis==="weight"&&v.weight_kg?'kgrate':'price')+'" data-id="'+v.id+'">'+(v.fee_basis==="weight"&&v.weight_kg?'Rate/kg':'Price')+'</button> <button class="btn sm" data-a="gst" data-id="'+v.id+'">GST</button> <button class="btn ghost sm" data-a="vis" data-id="'+v.id+'">'+(v.active?'Hide':'Show')+'</button></div>':"")+'</div>'}).join("")}
 function loginV(){
  return '<main><h1 style="margin-top:60px">Nuvicon Ops</h1><p class="mut">Staff login</p>'+
  (S.step==="phone"?'<input id="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" value="'+esc(S.phone)+'"><button class="btn" data-a="send"'+(S.busy?' disabled':'')+'>Send code</button>':
@@ -403,22 +405,22 @@ document.addEventListener("click",async function(e){
    if(r4.error)alert(r4.error.message);else{await audit("stock_received","inventory",id,{qty:q,total:tot,reason:rr});toast("Stock updated");await loadInv()}}}
  else if(a==="kgrate"){
   var kv=S.inv.find(function(x){return x.id==id}),sibs=S.inv.filter(function(x){return x.product_id===kv.product_id&&x.fee_basis==="weight"&&Number(x.weight_kg)>0});
-  var kr=prompt("New SELLING rate per kg (₹, before GST).\nThis updates all "+sibs.length+" sizes of "+kv.products.brand+" "+kv.products.name+".",kv.price_per_kg==null?"":kv.price_per_kg);if(kr===null)return;
-  kr=parseFloat(kr);if(!(kr>0)){alert("Invalid rate");return}
+  var kr=prompt("New SELLING rate per kg INCLUDING GST (₹).\nThis updates all "+sibs.length+" sizes of "+kv.products.brand+" "+kv.products.name+".",kv.price_per_kg==null?"":Math.round(kv.price_per_kg*gi(kv.products.gst_percent)*100)/100);if(kr===null)return;
+  kr=parseFloat(kr);if(!(kr>0)){alert("Invalid rate");return}var krx=r4(kr/gi(kv.products.gst_percent));
   var kc=prompt("Your PURCHASE rate per kg (₹, before GST). Leave empty to keep the old cost.","");if(kc===null)return;
   var kcn=kc.trim()===""?null:parseFloat(kc);if(kcn!==null&&!(kcn>=0)){alert("Invalid purchase rate");return}
   var kw=why("Changing steel rate to "+kr+" per kg",true);if(kw===null)return;
   var bad=0;
-  for(var ki=0;ki<sibs.length;ki++){var sv=sibs[ki],np2=Math.round(kr*Number(sv.weight_kg)*100)/100;
-   var ku=await sb.from("variants").update({price:np2,price_per_kg:kr}).eq("id",sv.id);
+  for(var ki=0;ki<sibs.length;ki++){var sv=sibs[ki],np2=r4(krx*Number(sv.weight_kg));
+   var ku=await sb.from("variants").update({price:np2,price_per_kg:krx}).eq("id",sv.id);
    if(ku.error){bad++;continue}
    await audit("price_change","variants",sv.id,{from:sv.price,to:np2,reason:kw});
    if(kcn!==null){var kk=await sb.rpc("set_variant_cost",{p_variant:sv.id,p_cost:Math.round(kcn*Number(sv.weight_kg)*100)/100,p_reason:kw});if(kk.error)bad++}}
   if(bad)alert("Some sizes could not be updated ("+bad+"). Please check and try again.");else toast("Updated "+sibs.length+" sizes");
   await loadInv()}
  else if(a==="price"){
-  var v2=S.inv.find(function(x){return x.id==id}),p=prompt("New price for "+v2.products.name+" ("+v2.label+"), before GST",v2.price);
-  p=parseFloat(p);
+  var v2=S.inv.find(function(x){return x.id==id}),p=prompt("New price for "+v2.products.name+" ("+v2.label+") INCLUDING GST (₹)",Math.round(v2.price*gi(v2.products.gst_percent)*100)/100);
+  p=parseFloat(p);if(p>=0)p=r4(p/gi(v2.products.gst_percent));
   if(p>=0){var rp=why("Changing price",true);if(rp===null)return;var r5=await sb.from("variants").update({price:p}).eq("id",id);
    if(r5.error)alert(r5.error.message);else{await audit("price_change","variants",id,{from:v2.price,to:p,reason:rp});toast("Price updated");await loadInv()}}}
  else if(a==="bmode")S.bulk.mode=id;
@@ -523,8 +525,8 @@ document.addEventListener("click",async function(e){
   var ex=S.inv.find(function(v){return v.products.brand.toLowerCase()===nb.toLowerCase()&&v.products.name.toLowerCase()===nn.toLowerCase()}),pid;
   if(ex){pid=ex.product_id;if(S.inv.some(function(v){return v.product_id===pid&&v.label.toLowerCase()===nl.toLowerCase()})){alert("This size already exists for this item");return}}
   else{var pi=await sb.from("products").insert({brand:nb,name:nn,category:nc,gst_percent:ng}).select("id").single();if(pi.error){alert(pi.error.message);return}pid=pi.data.id}
-  var wt=nf.basis==="weight",kgv=Number(nf.kg),pr0=wt?Math.round(np*kgv*100)/100:np;
-  var vi2=await sb.from("variants").insert({product_id:pid,label:nl,price:pr0,fee_basis:nf.basis,weight_kg:wt?kgv:null,price_per_kg:wt?np:null}).select("id").single();
+  var wt=nf.basis==="weight",kgv=Number(nf.kg),exv=r4(np/gi(ng)),pr0=wt?r4(exv*kgv):exv;
+  var vi2=await sb.from("variants").insert({product_id:pid,label:nl,price:pr0,fee_basis:nf.basis,weight_kg:wt?kgv:null,price_per_kg:wt?exv:null}).select("id").single();
   if(vi2.error){alert(vi2.error.message);return}
   var ii=await sb.from("inventory").insert({variant_id:vi2.data.id,total:0});if(ii.error){alert(ii.error.message);return}
   if(nf.cost!==""){var cc=await sb.rpc("set_variant_cost",{p_variant:vi2.data.id,p_cost:wt?Math.round(Number(nf.cost)*kgv*100)/100:Number(nf.cost),p_reason:"new item"});if(cc.error)alert("Item added, but cost was not saved: "+cc.error.message)}
