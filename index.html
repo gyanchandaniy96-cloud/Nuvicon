@@ -62,6 +62,13 @@ async function loadInv(){
  var r=await sb.from("variants").select("id,label,price,active,product_id,fee_basis,weight_kg,price_per_kg,products(brand,name,gst_percent,category),inventory(total,reserved)").order("product_id").order("id");
  if(r.error){S.loadErr=r.error.message}else{S.inv=r.data.map(function(v){v.inv=Array.isArray(v.inventory)?v.inventory[0]:v.inventory;return v})}}
 async function loadAll(){await Promise.all([loadOrders(),loadInv(),loadCfg(),loadPartners()])}
+var ALERT_MIN=10;
+function overdue(){var now=Date.now();return S.orders.filter(function(o){return o.status==="placed"&&!o.partner_id&&(o.pay_method!=="online"||o.pay_status==="paid")&&now-new Date(o.created_at).getTime()>ALERT_MIN*60000})}
+function barHtml(){var od=overdue();if(!od.length)return"";return '<div style="background:#b3392f;color:#fff;border-radius:8px;padding:10px 12px;margin:10px 0"><b>'+od.length+' order'+(od.length>1?'s':'')+' not assigned for '+ALERT_MIN+'+ minutes</b><br><small>'+od.map(function(o){return '#'+esc(o.order_no)}).join(', ')+'</small><div style="margin-top:8px"><button class="btn sm" data-a="go" data-id="orders">Open orders</button></div></div>'}
+function alertNew(){var od=overdue();S.alerted=S.alerted||{};var fresh=od.filter(function(o){return !S.alerted[o.id]});if(!fresh.length)return;fresh.forEach(function(o){S.alerted[o.id]=1});
+ try{if(navigator.vibrate)navigator.vibrate([300,150,300])}catch(e){}
+ try{var AC=window.AudioContext||window.webkitAudioContext;if(AC){var c=new AC(),g=c.createGain(),os=c.createOscillator();os.connect(g);g.connect(c.destination);g.gain.value=.15;os.frequency.value=880;os.start();os.stop(c.currentTime+.5)}}catch(e){}
+ try{if(window.Notification&&Notification.permission==="granted")new Notification("Nuvicon: order not assigned",{body:fresh.map(function(o){return '#'+o.order_no}).join(", ")+" waiting for a partner"})}catch(e){}}
 function ordersV(){
  var act=S.orders.filter(function(o){return o.status!=="delivered"&&o.status!=="cancelled"});
  var today=new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Kolkata"});
@@ -391,7 +398,7 @@ function render(){
  if(S.boot){a.innerHTML='<div class="empty">Loading…</div>';n.innerHTML="";return}
  if(!S.user){a.innerHTML=loginV();n.innerHTML="";return}
  if(S.role==="customer"||!S.role){a.innerHTML='<main><h1 style="margin-top:60px">No access</h1><p class="mut">This number is not a staff account. Ask an admin to give you the staff role.</p><button class="btn ghost" data-a="out">Log out</button></main>';n.innerHTML="";return}
- a.innerHTML='<div class="top"><div><b>NUVICON</b><small>OPS</small></div><div><small style="color:#aaa">'+esc(S.role)+'</small> <button data-a="out">Log out</button></div></div><main>'+viewHtml()+'</main>';
+ a.innerHTML='<div class="top"><div><b>NUVICON</b><small>OPS</small></div><div><small style="color:#aaa">'+esc(S.role)+'</small> <button data-a="out">Log out</button></div></div><main><div id="abar">'+barHtml()+'</div>'+viewHtml()+'</main>';
  n.innerHTML=[["orders","Orders"],["stock","Inventory"],["catalog","Catalog"],["more","More"]].map(function(t){return '<button class="'+(navOn(t[0])?'on':'')+'" data-a="go" data-id="'+t[0]+'">'+t[1]+'</button>'}).join("")}
 document.addEventListener("click",async function(e){
  var b=e.target.closest("[data-a]");if(!b||b.disabled)return;
@@ -690,6 +697,6 @@ document.addEventListener("change",function(e){var t=e.target;
  else if(t.dataset&&t.dataset.bi!=null&&t.dataset.f==="v")S.bill.rows[+t.dataset.bi].v=t.value;
  else if(t.dataset&&t.dataset.sh!=null){var hh=S.cfg.hours.find(function(x){return String(x.day)===t.dataset.sh});if(hh){if(t.dataset.f==="open")hh.is_open=t.checked;else hh[t.dataset.f]=t.value}}
  else if(t.dataset&&t.dataset.af&&t.dataset.af!=="q"){S.af[t.dataset.af]=t.value;render()}});
-setInterval(function(){if(S.user&&S.role&&S.role!=="customer"&&S.view==="orders"&&!document.hidden){loadOrders().then(render)}},20000);
+setInterval(function(){if(S.user&&S.role&&S.role!=="customer"&&!document.hidden){loadOrders().then(function(){if(S.view==="orders")render();else{var e=document.getElementById("abar");if(e)e.innerHTML=barHtml()}alertNew()})}},20000);
 render();whoami();
 </script></body></html>
