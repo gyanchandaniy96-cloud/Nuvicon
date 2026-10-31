@@ -91,7 +91,7 @@ function bulkV(){
  '<small>'+(B.mode==="add"?'Enter the quantity received; it will be added to current stock.':'Enter the actual count at the godown; stock will be set to it.')+'</small>'+
  '<div class="chips"><button class="chip'+(B.cat==="all"?' on':'')+'" data-a="bcat" data-id="all">All</button>'+cats().map(function(c){return '<button class="chip'+(B.cat===c?' on':'')+'" data-a="bcat" data-id="'+esc(c)+'">'+esc(c)+'</button>'}).join("")+'</div>'+
  vs.map(function(v){var i=v.inv||{total:0,reserved:0};
-  return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', now '+i.total+' (reserved '+i.reserved+')</small></div><input type="number" inputmode="numeric" min="0" data-bulk="'+v.id+'" value="'+esc(B.vals[v.id]==null?"":B.vals[v.id])+'" placeholder="0" style="width:90px;margin:0"></div>'}).join("")+
+  return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+', now '+i.total+(v.fee_basis==="weight"?' rods':'')+' (reserved '+i.reserved+')</small></div><input type="number" inputmode="numeric" min="0" data-bulk="'+v.id+'" value="'+esc(B.vals[v.id]==null?"":B.vals[v.id])+'" placeholder="0" style="width:90px;margin:0"></div>'}).join("")+
  '<div style="position:sticky;bottom:72px;padding-top:6px"><button class="btn" style="width:100%" data-a="bapply"'+(n?'':' disabled')+'>Update '+n+' items</button></div>'}
 function normT(s){return String(s).toLowerCase().replace(/(\d)\s*(kg|mm|ml|ltr|litre|liter|l|m)(?![a-z])/g,function(m,n,u){return n+(/^(ltr|litre|liter)$/.test(u)?"l":u)}).replace(/(\d)\s*x\s*(?=\d)/g,"$1x")}
 function reEsc(t){return t.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
@@ -361,7 +361,7 @@ function stockV(){
  var low=S.inv.filter(function(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<=S.cfg.low}).length;
  return '<h1>Inventory</h1><small>'+S.inv.length+' variants, '+low+' low or out</small><div class="flex" style="margin:8px 0"><button class="btn sm" data-a="go" data-id="bulk">Bulk update</button><button class="btn sm" data-a="go" data-id="bill">Upload bill</button></div><input id="q" placeholder="Search product or size" value="'+esc(S.q)+'">'+
  (vs.length?vs.map(function(v){var t=stk(v),i=v.inv||{total:0,reserved:0};
-  return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+'</small><br><span class="pill '+t[0]+'">'+t[1]+'</span> <small>Available <b>'+(i.total-i.reserved)+'</b>, total '+i.total+', reserved '+i.reserved+'</small></div><button class="btn sm" data-a="recv" data-id="'+v.id+'">+ Receive</button></div>'}).join(""):'<div class="empty">Nothing matches.</div>')}
+  return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+'</small><br><span class="pill '+t[0]+'">'+t[1]+'</span> <small>Available <b>'+(i.total-i.reserved)+'</b>'+(v.fee_basis==="weight"&&v.weight_kg?' rods (about '+Math.round((i.total-i.reserved)*v.weight_kg)+' kg)':'')+', total '+i.total+', reserved '+i.reserved+'</small></div><button class="btn sm" data-a="recv" data-id="'+v.id+'">+ Receive</button></div>'}).join(""):'<div class="empty">Nothing matches.</div>')}
 var ROD={20:30.5,16:18.8,12:10.2,10:7,8:4.55,6:3.1};
 function nfAuto(){
  var f=S.nf,txt=(f.cat+" "+f.name+" "+f.label+" "+f.brand).toLowerCase();
@@ -414,8 +414,8 @@ document.addEventListener("click",async function(e){
   if(r3.error){showAlert(r3.error.message)}else{toast("Order updated");if(rs0)await audit("order_note","orders",id,{reason:rs0})}
   await loadAll()}
  else if(a==="recv"){
-  var v=S.inv.find(function(x){return x.id==id}),q=await ask("Quantity received for "+v.products.name+" ("+v.label+")");
-  q=parseInt(q,10);
+  var v=S.inv.find(function(x){return x.id==id}),wt=v.fee_basis==="weight"&&Number(v.weight_kg)>0,q=await ask(wt?"Weight received in kg for "+v.products.name+" ("+v.label+"). 1 rod = "+v.weight_kg+" kg":"Quantity received for "+v.products.name+" ("+v.label+")");
+  q=wt?Math.round(parseFloat(q)/Number(v.weight_kg)):parseInt(q,10);
   if(q>0){var rr=await why("Stock receive",false);if(rr===null)return;var tot=(v.inv?v.inv.total:0)+q;
    var r4=await sb.from("inventory").upsert({variant_id:+id,total:tot,last_received:new Date().toISOString().slice(0,10)});
    if(r4.error)showAlert(r4.error.message);else{await audit("stock_received","inventory",id,{qty:q,total:tot,reason:rr});toast("Stock updated");await loadInv()}}}
