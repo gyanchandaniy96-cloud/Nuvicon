@@ -62,7 +62,7 @@ async function loadOrders(){
  var r=await sb.from("orders").select("id,order_no,total,subtotal,gst_total,delivery_fee,delivery_gst,status,pay_status,pay_method,address,created_at,profiles(phone,full_name),zones(name),order_items(product_name,variant_label,qty,unit_price,variants(fee_basis,weight_kg)),partner_id,vehicle_id,partner_fee,cod_collected,partners(name,phone),vehicles(reg_no),area_text,delivery_lat,delivery_lng,distance_km").order("created_at",{ascending:false}).limit(200);
  if(r.error){S.loadErr=r.error.message}else{S.orders=r.data;S.loadErr=""}}
 async function loadInv(){
- var r=await sb.from("variants").select("id,label,price,active,product_id,fee_basis,weight_kg,price_per_kg,products(brand,name,gst_percent,category),inventory(total,reserved)").order("product_id").order("id");
+ var r=await sb.from("variants").select("id,label,price,active,product_id,fee_basis,weight_kg,price_per_kg,products(brand,name,gst_percent,category),bulk_prices(id,min_qty,price),inventory(total,reserved)").order("product_id").order("id");
  if(r.error){S.loadErr=r.error.message}else{S.inv=r.data.map(function(v){v.inv=Array.isArray(v.inventory)?v.inventory[0]:v.inventory;return v})}}
 async function loadAll(){await Promise.all([loadOrders(),loadInv(),loadCfg(),loadPartners()])}
 async function loadCarts(){var r=await sb.rpc("abandoned_carts");if(!r.error&&Array.isArray(r.data))S.carts=r.data}
@@ -384,7 +384,7 @@ function stockV(){
  var low=S.inv.filter(function(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<=S.cfg.low}).length;
  return '<h1>Inventory</h1><small>'+S.inv.length+' variants, '+low+' low or out</small><div class="flex" style="margin:8px 0"><button class="btn sm" data-a="go" data-id="bulk">Bulk update</button><button class="btn sm" data-a="go" data-id="bill">Upload bill</button></div><input id="q" placeholder="Search product or size" value="'+esc(S.q)+'">'+
  (vs.length?vs.map(function(v){var t=stk(v),i=v.inv||{total:0,reserved:0};
-  return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+'</small><br><span class="pill '+t[0]+'">'+t[1]+'</span> <small>Available <b>'+(i.total-i.reserved)+'</b>'+(v.fee_basis==="weight"&&v.weight_kg?' rods (about '+Math.round((i.total-i.reserved)*v.weight_kg)+' kg)':'')+', total '+i.total+', reserved '+i.reserved+'</small></div><button class="btn sm" data-a="recv" data-id="'+v.id+'">+ Receive</button></div>'}).join(""):'<div class="empty">Nothing matches.</div>')}
+  return '<div class="card flex"><div><b>'+esc(v.products.brand+" "+v.products.name)+'</b><br><small>'+esc(v.label)+'</small><br><span class="pill '+t[0]+'">'+t[1]+'</span> <small>Available <b>'+(i.total-i.reserved)+'</b>'+(v.fee_basis==="weight"&&v.weight_kg?' rods (about '+Math.round((i.total-i.reserved)*v.weight_kg)+' kg)':'')+', total '+i.total+', reserved '+i.reserved+'</small>'+(v.bulk_prices||[]).slice().sort(function(a,b){return a.min_qty-b.min_qty}).map(function(t){var wk=v.fee_basis==="weight"&&Number(v.weight_kg)>0;return '<br><small>Bulk '+t.min_qty+'+ : <b>₹'+(Math.round(Number(t.price)*gi(v.products.gst_percent)*100)/100)+'</b> each'+(wk?' (₹'+(Math.round(Number(t.price)/Number(v.weight_kg)*gi(v.products.gst_percent)*100)/100)+'/kg)':'')+' <span role="button" data-a="bulkdel" data-id="'+t.id+'" style="color:#b3261e;text-decoration:underline;cursor:pointer">remove</span></small>'}).join("")+'</div><div style="display:flex;flex-direction:column;gap:6px"><button class="btn sm" data-a="recv" data-id="'+v.id+'">+ Receive</button><button class="btn sm" data-a="bulkadd" data-id="'+v.id+'">+ Bulk price</button></div></div>'}).join(""):'<div class="empty">Nothing matches.</div>')}
 var ROD={20:30.5,16:18.8,12:10.2,10:7,8:4.55,6:3.1};
 function nfAuto(){
  var f=S.nf,txt=(f.cat+" "+f.name+" "+f.label+" "+f.brand).toLowerCase();
@@ -462,6 +462,22 @@ document.addEventListener("click",async function(e){
   p=parseFloat(p);if(p>=0)p=rnd4(p/gi(v2.products.gst_percent));
   if(p>=0){var rp=await why("Changing price",true);if(rp===null)return;var r5=await sb.from("variants").update({price:p}).eq("id",id);
    if(r5.error)showAlert(r5.error.message);else{await audit("price_change","variants",id,{from:v2.price,to:p,reason:rp});toast("Price updated");await loadInv()}}}
+ else if(a==="bulkadd"){
+  var bv=S.inv.find(function(x){return x.id==id}),bw=bv.fee_basis==="weight"&&Number(bv.weight_kg)>0;
+  var bq=await ask("Bulk price for "+bv.products.name+" ("+bv.label+").\nMinimum quantity"+(bw?" (in rods)":"")+" for this price (2 or more):","");if(bq===null)return;bq=parseInt(bq,10);
+  if(!(bq>=2)){showAlert("Quantity must be 2 or more");return}
+  var cur=Math.round(Number(bv.price)*gi(bv.products.gst_percent)*100)/100;
+  var bp=await ask(bw?"Bulk rate per kg INCLUDING GST (₹) for "+bq+"+ rods":"Bulk price per unit INCLUDING GST (₹) for "+bq+"+ units\n(current price: ₹"+cur+")","");if(bp===null)return;bp=parseFloat(bp);
+  if(!(bp>0)){showAlert("Invalid price");return}
+  var bx=bw?rnd4(bp/gi(bv.products.gst_percent)*Number(bv.weight_kg)):rnd4(bp/gi(bv.products.gst_percent));
+  if(bx>=Number(bv.price)){showAlert("Bulk price must be lower than the normal price (₹"+cur+(bw?" per rod":"")+")");return}
+  var br=await why("Adding bulk price",false);if(br===null)return;
+  var rb=await sb.rpc("set_bulk_price",{p_variant:+id,p_min_qty:bq,p_price:bx,p_reason:br||null});
+  if(rb.error)showAlert(rb.error.message);else{toast("Bulk price saved");await loadInv()}}
+ else if(a==="bulkdel"){
+  var rw=await why("Removing bulk price",false);if(rw===null)return;
+  var rd=await sb.rpc("delete_bulk_price",{p_id:+id});
+  if(rd.error)showAlert(rd.error.message);else{toast("Removed");await loadInv()}}
  else if(a==="bmode")S.bulk.mode=id;
  else if(a==="bcat")S.bulk.cat=id;
  else if(a==="baddrow")S.bill.rows.push({v:"",q:"",raw:""});
