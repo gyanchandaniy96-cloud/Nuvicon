@@ -1,6 +1,9 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#14191c">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <title>Nuvicon Ops</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -39,7 +42,7 @@ nav button.on{color:var(--ink);box-shadow:inset 0 3px 0 var(--acc)}
 var U="https://ptbaxvqvwhgowflxzqmh.supabase.co",K="sb_publishable_QeRuu6oa6UKMuPTaIjgLcg_BuX-n2dI";
 var sb=window.supabase.createClient(U,K);
 var FLOW=["placed","staged","picked_up","in_transit","delivered"],LBL={placed:"Placed",staged:"Staged",picked_up:"Picked up",in_transit:"In transit",delivered:"Delivered",cancelled:"Cancelled"};
-var S={nf:{brand:"",name:"",cat:"",gst:"18",label:"",price:"",cost:"",basis:"bag",kg:"",bt:false,kt:false},pr:null,pper:"month",exps:[],costs:{},ef:{cat:"Salary",amt:"",note:""},credit:[],cf:{phone:"",sd:""},user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",partners:[],vehicles:[],rates:[],zones:[],pf:{name:"",phone:""},zonef:"",cfg:{onl:false,rzk:"",hours:[],force:false,low:20,city:"Pusad",gkey:"",godown:null,rad:30,dfee:0,fbag:12,fqtl:60,fkm:35,fmin:100,ffree:5,dgst:0},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
+var S={nf:{brand:"",name:"",cat:"",gst:"18",label:"",price:"",cost:"",basis:"bag",kg:"",bt:false,kt:false},pr:null,pper:"month",exps:[],costs:{},ef:{cat:"Salary",amt:"",note:""},credit:[],cf:{phone:"",sd:""},user:null,role:null,view:"orders",boot:true,step:"phone",phone:"",otp:"",err:"",busy:false,orders:[],f:"active",inv:[],q:"",open:{},loadErr:"",partners:[],vehicles:[],rates:[],zones:[],pf:{name:"",phone:""},zonef:"",cfg:{onl:false,rzk:"",hours:[],force:false,low:20,city:"Pusad",gkey:"",godown:null,rad:30,dfee:0,fbag:12,fqtl:60,fkm:35,fmin:100,ffree:5,dgst:0,acm:15},staff:[],invites:[],audit:[],profs:{},af:{q:"",user:"",act:""},sf:{name:"",phone:"",role:"staff"},bulk:{mode:"add",cat:"all",vals:{}},bill:{busy:false,msg:"",name:"",rows:[],err:"",done:false}};
 function esc(t){return String(t==null?"":t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;")}
 function fmt(n){n=Math.round(Number(n)*100)/100;return "₹"+n.toLocaleString("en-IN",{minimumFractionDigits:n%1?2:0,maximumFractionDigits:2})}
 function gi(g){return 1+Number(g)/100}
@@ -62,9 +65,21 @@ async function loadInv(){
  var r=await sb.from("variants").select("id,label,price,active,product_id,fee_basis,weight_kg,price_per_kg,products(brand,name,gst_percent,category),inventory(total,reserved)").order("product_id").order("id");
  if(r.error){S.loadErr=r.error.message}else{S.inv=r.data.map(function(v){v.inv=Array.isArray(v.inventory)?v.inventory[0]:v.inventory;return v})}}
 async function loadAll(){await Promise.all([loadOrders(),loadInv(),loadCfg(),loadPartners()])}
+async function loadCarts(){var r=await sb.rpc("abandoned_carts");if(!r.error&&Array.isArray(r.data))S.carts=r.data}
+function cartsV(){
+ var l=S.carts||[];
+ return '<h1>Carts</h1><button class="btn ghost sm" data-a="go" data-id="more">&larr; More</button><small style="display:block;margin:8px 0">Customers who added items but did not order. Call or WhatsApp them.</small>'+
+ (l.length?l.map(function(c){
+  var ph=String(c.phone||"").replace(/\D/g,""),mins=Math.max(1,Math.round((Date.now()-new Date(c.updated_at).getTime())/60000)),
+   msg=encodeURIComponent("Hello"+(c.full_name?" "+c.full_name:"")+", this is Nuvicon. You left some items in your cart. Can we help you complete your order?");
+  return '<div class="card"><div class="flex"><div><b>'+esc(c.full_name||"Customer")+'</b><br><small>+'+esc(ph)+', '+(mins>=60?Math.floor(mins/60)+' h '+mins%60+' min':mins+' min')+' ago</small></div><b>'+fmt(c.total)+'</b></div>'+
+   '<div class="items">'+(c.lines||[]).map(function(x){return esc(x.qty)+' × '+esc(String(x.name).trim())+' ('+esc(x.label)+')'+(x.wt_kg?' [approx. '+Math.round(x.wt_kg)+' kg]':'')}).join('<br>')+'<br><small>Total with GST, delivery not included</small></div>'+
+   '<div class="flex" style="gap:8px"><a class="btn sm" href="tel:+'+ph+'" style="text-decoration:none;text-align:center">Call</a><a class="btn sm" href="https://wa.me/'+ph+'?text='+msg+'" target="_blank" rel="noopener" style="text-decoration:none;text-align:center">WhatsApp</a><button class="btn ghost sm" data-a="cdone" data-id="'+esc(c.customer_id)+'">Done</button></div></div>'}).join(""):'<div class="empty">No carts are waiting right now.</div>')}
 var ALERT_MIN=10;
 function overdue(){var now=Date.now();return S.orders.filter(function(o){return o.status==="placed"&&!o.partner_id&&(o.pay_method!=="online"||o.pay_status==="paid")&&now-new Date(o.created_at).getTime()>ALERT_MIN*60000})}
-function barHtml(){var od=overdue();if(!od.length)return"";return '<div style="background:#b3392f;color:#fff;border-radius:8px;padding:10px 12px;margin:10px 0"><b>'+od.length+' order'+(od.length>1?'s':'')+' not assigned for '+ALERT_MIN+'+ minutes</b><br><small>'+od.map(function(o){return '#'+esc(o.order_no)}).join(', ')+'</small><div style="margin-top:8px"><button class="btn sm" data-a="go" data-id="orders">Open orders</button></div></div>'}
+function cartBar(){var n=(S.carts||[]).length;return n?'<div style="background:#F2B705;color:#1d2428;border-radius:8px;padding:10px 12px;margin:10px 0"><b>'+n+' cart'+(n>1?'s':'')+' waiting for a call</b><div style="margin-top:8px"><button class="btn sm" data-a="go" data-id="carts">Open carts</button></div></div>':''}
+function barHtml(){return barHtml0()+pushHtml()}
+function barHtml0(){var od=overdue();if(!od.length)return cartBar();return cartBar()+'<div style="background:#b3392f;color:#fff;border-radius:8px;padding:10px 12px;margin:10px 0"><b>'+od.length+' order'+(od.length>1?'s':'')+' not assigned for '+ALERT_MIN+'+ minutes</b><br><small>'+od.map(function(o){return '#'+esc(o.order_no)}).join(', ')+'</small><div style="margin-top:8px"><button class="btn sm" data-a="go" data-id="orders">Open orders</button></div></div>'}
 function alertNew(){var od=overdue();S.alerted=S.alerted||{};var fresh=od.filter(function(o){return !S.alerted[o.id]});if(!fresh.length)return;fresh.forEach(function(o){S.alerted[o.id]=1});
  try{if(navigator.vibrate)navigator.vibrate([300,150,300])}catch(e){}
  try{var AC=window.AudioContext||window.webkitAudioContext;if(AC){var c=new AC(),g=c.createGain(),os=c.createOscillator();os.connect(g);g.connect(c.destination);g.gain.value=.15;os.frequency.value=880;os.start();os.stop(c.currentTime+.5)}}catch(e){}
@@ -193,7 +208,7 @@ async function loadCfg(){
  var h=await sb.from("store_hours").select("day,is_open,opens,closes").order("day");
  var st=await sb.from("settings").select("key,value");
  if(h.data)S.cfg.hours=h.data;
- if(st.data)st.data.forEach(function(x){if(x.key==="force_closed")S.cfg.force=(x.value===true||x.value==="true");if(x.key==="low_stock_threshold")S.cfg.low=Number(x.value)||20;if(x.key==="city"&&x.value)S.cfg.city=String(x.value);if(x.key==="online_pay")S.cfg.onl=(x.value===true||x.value==="true");if(x.key==="rzp_key_id")S.cfg.rzk=x.value?String(x.value):"";if(x.key==="gmaps_key")S.cfg.gkey=x.value?String(x.value):"";if(x.key==="godown"&&x.value&&x.value.lat!=null)S.cfg.godown={lat:+x.value.lat,lng:+x.value.lng};if(x.key==="max_radius_km")S.cfg.rad=Number(x.value)||0;if(x.key==="default_partner_fee")S.cfg.dfee=Number(x.value)||0;if(x.key==="fee_per_bag")S.cfg.fbag=Number(x.value)||0;if(x.key==="fee_per_quintal")S.cfg.fqtl=Number(x.value)||0;if(x.key==="fee_per_km")S.cfg.fkm=Number(x.value)||0;if(x.key==="fee_min")S.cfg.fmin=Number(x.value)||0;if(x.key==="fee_free_km")S.cfg.ffree=Number(x.value)||0;if(x.key==="delivery_gst_percent")S.cfg.dgst=Number(x.value)})}
+ if(st.data)st.data.forEach(function(x){if(x.key==="force_closed")S.cfg.force=(x.value===true||x.value==="true");if(x.key==="low_stock_threshold")S.cfg.low=Number(x.value)||20;if(x.key==="city"&&x.value)S.cfg.city=String(x.value);if(x.key==="online_pay")S.cfg.onl=(x.value===true||x.value==="true");if(x.key==="rzp_key_id")S.cfg.rzk=x.value?String(x.value):"";if(x.key==="pay_gateway")S.cfg.gw=String(x.value)==="cashfree"?"cashfree":"razorpay";if(x.key==="gmaps_key")S.cfg.gkey=x.value?String(x.value):"";if(x.key==="godown"&&x.value&&x.value.lat!=null)S.cfg.godown={lat:+x.value.lat,lng:+x.value.lng};if(x.key==="max_radius_km")S.cfg.rad=Number(x.value)||0;if(x.key==="default_partner_fee")S.cfg.dfee=Number(x.value)||0;if(x.key==="fee_per_bag")S.cfg.fbag=Number(x.value)||0;if(x.key==="fee_per_quintal")S.cfg.fqtl=Number(x.value)||0;if(x.key==="fee_per_km")S.cfg.fkm=Number(x.value)||0;if(x.key==="fee_min")S.cfg.fmin=Number(x.value)||0;if(x.key==="fee_free_km")S.cfg.ffree=Number(x.value)||0;if(x.key==="delivery_gst_percent")S.cfg.dgst=Number(x.value);if(x.key==="abandoned_cart_minutes")S.cfg.acm=Number(x.value)||15})}
 async function loadStaff(){
  var p=await sb.from("profiles").select("id,full_name,phone,role").in("role",["staff","admin"]).order("created_at");
  var i=await sb.from("staff_invites").select("phone,role,full_name");
@@ -236,7 +251,7 @@ function sumry(a){var d=a.details||{};
 function backBtn(){return '<button class="btn ghost sm" data-a="go" data-id="more">&larr; More</button>'}
 function moreV(){
  var it=function(id,t,sub){return '<div class="card flex" data-a="go" data-id="'+id+'" style="cursor:pointer"><div><b>'+t+'</b><br><small>'+sub+'</small></div><span>&rsaquo;</span></div>'};
- return '<h1>More</h1>'+(S.role==="admin"?it("staff","Staff","Add team members, change roles")+it("settings","Settings","Store timing, open/close, low stock limit")+it("partners","Partners","Transporters, vehicles, rate card")+it("credit","Credit customers","Security deposits and outstanding balances")+it("profit","Profit","Sales, costs, expenses and net profit (admin only)"):"")+it("audit","Audit log","A record of every change")+'<div class="card flex" data-a="out" style="cursor:pointer"><b>Log out</b><span>&rsaquo;</span></div>'}
+ return '<h1>More</h1>'+it("carts","Carts","Customers who left items in their cart")+(S.role==="admin"?it("staff","Staff","Add team members, change roles")+it("settings","Settings","Store timing, open/close, low stock limit")+it("partners","Partners","Transporters, vehicles, rate card")+it("credit","Credit customers","Security deposits and outstanding balances")+it("profit","Profit","Sales, costs, expenses and net profit (admin only)"):"")+it("audit","Audit log","A record of every change")+'<div class="card flex" data-a="out" style="cursor:pointer"><b>Log out</b><span>&rsaquo;</span></div>'}
 function auditV(){
  var f=S.af,q=f.q.toLowerCase(),users={},acts={};
  S.audit.forEach(function(a){if(a.user_id)users[a.user_id]=1;acts[a.action]=1});
@@ -264,7 +279,8 @@ function settingsV(){
  return '<h1>Settings</h1>'+backBtn()+
  '<div class="card flex" style="margin-top:8px"><div><b>Store '+(c.force?'is closed now':'is open')+'</b><br><small>New orders stop as soon as the store is closed.</small></div><button class="btn '+(c.force?'':'bad ')+'sm" data-a="sforce">'+(c.force?'Open':'Close')+'</button></div>'+
  '<div class="card"><b>Store timing</b>'+c.hours.map(function(h){return '<div class="flex" style="margin:8px 0"><span style="width:78px">'+DAYS[h.day].slice(0,3)+'</span><label><input type="checkbox" data-sh="'+h.day+'" data-f="open"'+(h.is_open?' checked':'')+' style="width:auto;margin:0"> Open</label><input type="time" data-sh="'+h.day+'" data-f="opens" value="'+esc(String(h.opens).slice(0,5))+'" style="width:105px;margin:0"><input type="time" data-sh="'+h.day+'" data-f="closes" value="'+esc(String(h.closes).slice(0,5))+'" style="width:105px;margin:0"></div>'}).join("")+'<button class="btn" data-a="shsave">Save timing</button></div>'+
- '<div class="card"><b>Online payment (Razorpay)</b><br><small>Enter the Key Id here ("rzp_test_..." or "rzp_live_..."). The secret does not go here, it goes in Supabase. Customers see the online option next to COD only when a Key Id is saved and this is switched on.</small><input id="rzk" value="'+esc(c.rzk)+'" placeholder="rzp_test_..." style="margin-top:8px"><div class="flex"><button class="btn sm" data-a="srz">Key Id save</button><button class="btn '+(c.onl?'bad ':'')+'sm" data-a="sonl">'+(c.onl?'Turn online off':'Turn online on')+'</button></div><small>Now: '+(c.onl&&c.rzk?'on':'off')+'</small></div>'+
+ '<div class="card"><b>Payment gateway</b><br><small>Now using: <b>'+(c.gw==="cashfree"?'Cashfree':'Razorpay')+'</b>. Cashfree needs no Key Id here; its keys are stored in Supabase.</small><div class="flex" style="margin-top:8px"><button class="btn sm" data-a="sgw">Switch to '+(c.gw==="cashfree"?'Razorpay':'Cashfree')+'</button></div></div>'+
+ '<div class="card"><b>Online payment on or off</b><br><small>For Razorpay enter the Key Id here ("rzp_test_..." or "rzp_live_..."). The secret does not go here, it goes in Supabase. Customers see the online option next to COD only when this is switched on (and, for Razorpay, a Key Id is saved).</small><input id="rzk" value="'+esc(c.rzk)+'" placeholder="rzp_test_..." style="margin-top:8px"><div class="flex"><button class="btn sm" data-a="srz">Key Id save</button><button class="btn '+(c.onl?'bad ':'')+'sm" data-a="sonl">'+(c.onl?'Turn online off':'Turn online on')+'</button></div><small>Now: '+(c.onl&&(c.gw==="cashfree"||c.rzk)?'on':'off')+'</small></div>'+
  '<div class="card"><b>Google Maps key</b><br><small>The customer app map runs on this key. If the key or the godown location is empty, the old zone-based method is used.</small><input id="gmk" value="'+esc(c.gkey)+'" placeholder="AIza..." style="margin-top:8px"><button class="btn" data-a="sgm">Save</button></div>'+
  '<div class="card"><b>Godown location</b><br><small>Customer distance is measured from here. Stand at the godown and tap "My location".</small><input id="glat" inputmode="decimal" placeholder="Latitude (e.g. 19.9012)" value="'+(c.godown?c.godown.lat:"")+'" style="margin-top:8px"><input id="glng" inputmode="decimal" placeholder="Longitude (e.g. 77.5701)" value="'+(c.godown?c.godown.lng:"")+'"><div class="flex"><button class="btn ghost sm" data-a="gmy">My location</button><button class="btn sm" data-a="sgd">Save</button></div>'+(c.godown?'<div style="margin-top:8px"><a href="https://www.google.com/maps?q='+c.godown.lat+','+c.godown.lng+'" target="_blank" rel="noopener">View on Google Maps</a></div>':'')+'</div>'+
  '<div class="card"><b>Max delivery distance (km)</b><br><small>The customer app will not take orders farther than this from the godown. Enter 0 for no limit.</small><input id="radv" type="number" inputmode="numeric" value="'+c.rad+'" style="margin-top:8px"><button class="btn" data-a="srad">Save</button></div>'+
@@ -355,12 +371,12 @@ function partnersV(){
    (p.status!=="approved"?'<button class="btn sm" data-a="pst" data-id="'+p.id+'" data-s="approved">Approve</button>':'<button class="btn bad sm" data-a="pst" data-id="'+p.id+'" data-s="suspended">Suspend</button>')+'</div></div>'+
    vs.map(function(v){var exp=v.insurance_expires&&v.insurance_expires<today;return '<div class="flex" style="margin-top:8px"><div><b>'+esc(v.reg_no)+'</b> <small>'+esc(v.vtype||"")+(v.insurance_expires?', insurance '+esc(v.insurance_expires):'')+'</small> '+(exp?'<span class="pill out">Insurance expired</span>':'')+(v.active?'':'<span class="pill out">Off</span>')+'</div><button class="btn ghost sm" data-a="vst" data-id="'+v.id+'">'+(v.active?'Turn off':'Turn on')+'</button></div>'}).join("")+
    '<button class="btn ghost sm" data-a="vadd" data-id="'+p.id+'" style="margin-top:8px">+ Add vehicle</button></div>'}).join("")+
- '<div class="card" style="margin-top:12px"><b>Automatic delivery fee</b><br><small>The customer pays this same amount as a delivery charge. Fee = bags × bag rate + quintals × quintal rate + (km beyond the included distance) × km rate. Minimum fee applies to every order.</small>'+[["fbag","Per bag (cement)",S.cfg.fbag],["fqtl","Per quintal (steel etc.)",S.cfg.fqtl],["ffree","Distance included (km)",S.cfg.ffree,1],["fkm","Per km beyond that",S.cfg.fkm],["fmin","Minimum fee per order",S.cfg.fmin],["dgst","GST % on the delivery charge",S.cfg.dgst,2]].map(function(r){return '<div class="flex" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>'+r[1]+': <b>'+(r[3]===1?r[2]+' km':r[3]===2?r[2]+'%':fmt(r[2]))+'</b></span><button class="btn sm" data-a="frate" data-id="'+r[0]+'">Change</button></div>'}).join("")+'</div>'+
+ '<div class="card" style="margin-top:12px"><b>Automatic delivery fee</b><br><small>The customer pays this same amount as a delivery charge. Fee = bags × bag rate + quintals × quintal rate + (km beyond the included distance) × km rate. Minimum fee applies to every order.</small>'+[["fbag","Per bag (cement)",S.cfg.fbag],["fqtl","Per quintal (steel etc.)",S.cfg.fqtl],["ffree","Distance included (km)",S.cfg.ffree,1],["fkm","Per km beyond that",S.cfg.fkm],["fmin","Minimum fee per order",S.cfg.fmin],["dgst","GST % on the delivery charge",S.cfg.dgst,2],["acm","Cart reminder after (minutes)",S.cfg.acm,3]].map(function(r){return '<div class="flex" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>'+r[1]+': <b>'+(r[3]===1?r[2]+' km':r[3]===2?r[2]+'%':r[3]===3?r[2]+' min':fmt(r[2]))+'</b></span><button class="btn sm" data-a="frate" data-id="'+r[0]+'">Change</button></div>'}).join("")+'</div>'+
  '<div class="card flex" style="margin-top:12px"><div><b>Default fee</b><br><small>Used only when an order has no distance: '+fmt(S.cfg.dfee)+'</small></div><button class="btn sm" data-a="dfee">Change</button></div><h1 style="font-size:16px">Rate card (fee paid to the partner)</h1><small>Used only when an order has no distance (zone orders). Orders with a distance use the automatic fee above.</small><div style="margin-top:8px"></div>'+
  S.zones.filter(function(z){return z.active}).map(function(z){var r=rate(z.id);return '<div class="card flex"><div><b>'+esc(z.name)+'</b><br><small>'+(r==null?'Fee not set':fmt(r))+'</small></div><button class="btn sm" data-a="rate" data-id="'+z.id+'">'+(r==null?'Set':'Change')+'</button></div>'}).join("")}
 function viewHtml(){var v=S.view;
  if((v==="staff"||v==="settings"||v==="partners"||v==="credit"||v==="profit"||v==="costs")&&S.role!=="admin")v="more";
- return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():v==="partners"?partnersV():v==="credit"?creditV():v==="profit"?profitV():v==="costs"?costsV():catV()}
+ return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="carts"?cartsV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():v==="partners"?partnersV():v==="credit"?creditV():v==="profit"?profitV():v==="costs"?costsV():catV()}
 function navOn(t){var v=S.view;return v===t||(t==="stock"&&(v==="bulk"||v==="bill"))||(t==="more"&&(v==="staff"||v==="settings"||v==="audit"||v==="partners"||v==="credit"||v==="profit"||v==="costs"))}
 function stk(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<1?["out","Out"]:a<=S.cfg.low?["low","Low"]:["ok","OK"]}
 function stockV(){
@@ -403,7 +419,7 @@ function render(){
 document.addEventListener("click",async function(e){
  var b=e.target.closest("[data-a]");if(!b||b.disabled)return;
  var a=b.dataset.a,id=b.dataset.id,y=window.scrollY;S.err="";
- if(a==="go"){S.view=id;S.q="";S.loadErr="";if(id==="staff")await loadStaff();else if(id==="audit")await loadAudit();else if(id==="settings")await loadCfg();else if(id==="partners")await loadPartners();else if(id==="credit")await loadCredit();else if(id==="profit")await loadProfit();else if(id==="costs")await loadCosts()}
+ if(a==="go"){S.view=id;S.q="";S.loadErr="";if(id==="staff")await loadStaff();else if(id==="audit")await loadAudit();else if(id==="settings")await loadCfg();else if(id==="partners")await loadPartners();else if(id==="credit")await loadCredit();else if(id==="profit")await loadProfit();else if(id==="costs")await loadCosts();else if(id==="carts")await loadCarts()}
  else if(a==="f")S.f=id;
  else if(a==="tog")S.open[id]=!S.open[id];
  else if(a==="back"){S.step="phone";S.otp=""}
@@ -576,8 +592,17 @@ document.addEventListener("click",async function(e){
   var rkw=await why("Razorpay Key Id",false);if(rkw===null)return;
   var rkr=await sb.from("settings").upsert({key:"rzp_key_id",value:rk});
   if(rkr.error)showAlert(rkr.error.message);else{await audit("store_setting","settings","rzp_key_id",{rzp_key_id:rk?"set":"removed",reason:rkw});S.cfg.rzk=rk;toast("Saved")}}
+ else if(a==="cdone"){
+  var cn=await ask("Short note (for example: called, will order later)","");if(cn===null)return;
+  var cr5=await sb.rpc("cart_done",{p_customer:id,p_note:cn});
+  if(cr5.error)showAlert(cr5.error.message);else{toast("Done");await loadCarts();render()}}
+ else if(a==="sgw"){
+  var ng=S.cfg.gw==="cashfree"?"razorpay":"cashfree";
+  var gw2=await why("Switching the payment gateway to "+ng,true);if(gw2===null)return;
+  var gr=await sb.from("settings").upsert({key:"pay_gateway",value:ng});
+  if(gr.error)showAlert(gr.error.message);else{await audit("store_setting","settings","pay_gateway",{pay_gateway:ng,reason:gw2});S.cfg.gw=ng;toast("Gateway: "+ng);render()}}
  else if(a==="sonl"){
-  var no=!S.cfg.onl;if(no&&!S.cfg.rzk){showAlert("Save the Key Id first");return}
+  var no=!S.cfg.onl;if(no&&S.cfg.gw!=="cashfree"&&!S.cfg.rzk){showAlert("Save the Key Id first");return}
   var rnw=await why(no?"Turning online payment on":"Turning online payment off",true);if(rnw===null)return;
   var rnr=await sb.from("settings").upsert({key:"online_pay",value:no});
   if(rnr.error)showAlert(rnr.error.message);else{await audit("store_setting","settings","online_pay",{online_pay:no,reason:rnw});toast(no?"Online on":"Online off");await loadCfg()}}
@@ -600,7 +625,7 @@ document.addEventListener("click",async function(e){
   var rr7=await sb.from("settings").upsert({key:"max_radius_km",value:rv});
   if(rr7.error)showAlert(rr7.error.message);else{await audit("store_setting","settings","max_radius_km",{km:rv,reason:rw2});S.cfg.rad=rv;toast("Saved")}}
  else if(a==="frate"){
-  var FK={fbag:["fee_per_bag","Rate per bag (₹)"],fqtl:["fee_per_quintal","Rate per quintal (₹)"],fkm:["fee_per_km","Rate per km beyond the included distance (₹)"],ffree:["fee_free_km","Distance included in the base fee (km)"],dgst:["delivery_gst_percent","GST % charged to the customer on the delivery charge"],fmin:["fee_min","Minimum fee per order (₹)"]}[id];
+  var FK={fbag:["fee_per_bag","Rate per bag (₹)"],fqtl:["fee_per_quintal","Rate per quintal (₹)"],fkm:["fee_per_km","Rate per km beyond the included distance (₹)"],ffree:["fee_free_km","Distance included in the base fee (km)"],dgst:["delivery_gst_percent","GST % charged to the customer on the delivery charge"],acm:["abandoned_cart_minutes","Minutes a cart waits before it appears in Carts"],fmin:["fee_min","Minimum fee per order (₹)"]}[id];
   var fv=await ask(FK[1],S.cfg[id]);if(fv===null)return;fv=parseFloat(fv);if(!(fv>=0)){showAlert("Invalid amount");return}
   var fw=await why("Changing "+FK[1],true);if(fw===null)return;
   var fr=await sb.from("settings").upsert({key:FK[0],value:fv});
@@ -697,6 +722,37 @@ document.addEventListener("change",function(e){var t=e.target;
  else if(t.dataset&&t.dataset.bi!=null&&t.dataset.f==="v")S.bill.rows[+t.dataset.bi].v=t.value;
  else if(t.dataset&&t.dataset.sh!=null){var hh=S.cfg.hours.find(function(x){return String(x.day)===t.dataset.sh});if(hh){if(t.dataset.f==="open")hh.is_open=t.checked;else hh[t.dataset.f]=t.value}}
  else if(t.dataset&&t.dataset.af&&t.dataset.af!=="q"){S.af[t.dataset.af]=t.value;render()}});
-setInterval(function(){if(S.user&&S.role&&S.role!=="customer"&&!document.hidden){loadOrders().then(function(){if(S.view==="orders")render();else{var e=document.getElementById("abar");if(e)e.innerHTML=barHtml()}alertNew()})}},20000);
+
+/* ---- push notifications ---- */
+var PUSH_APP="admin",PUSH_KEY="BKMcBeQZ2yZqZytWbzR6MToidiqs3a_c4EOs8LFs-x3liaaKSNziCXfQKXLgFiPcMTqKkKFEkpgEkI2yXKvD7Lk",PUSH_CARD="card",PUSHST="unknown",PUSHERR="",pushSavedFor=null;
+function b64u(s){var p="=".repeat((4-s.length%4)%4),b=(s+p).replace(/-/g,"+").replace(/_/g,"/"),r=atob(b),o=new Uint8Array(r.length);for(var i=0;i<r.length;i++)o[i]=r.charCodeAt(i);return o}
+function pushOK(){return"serviceWorker"in navigator&&"PushManager"in window&&"Notification"in window}
+function pushStandalone(){return window.navigator.standalone===true||(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)}
+async function pushSave(sub){var j=sub.toJSON();var r=await sb.rpc("save_push_sub",{p_app:PUSH_APP,p_endpoint:j.endpoint,p_p256dh:j.keys.p256dh,p_auth:j.keys.auth});if(r.error)throw r.error}
+async function pushCheck(){
+ if(!pushOK()){PUSHST=/iphone|ipad|ipod/i.test(navigator.userAgent)&&!pushStandalone()?"install":"unsupported";return}
+ if(Notification.permission==="denied"){PUSHST="blocked";return}
+ try{var reg=await navigator.serviceWorker.getRegistration();var sub=reg?await reg.pushManager.getSubscription():null;
+  PUSHST=(sub&&Notification.permission==="granted")?"on":"off"}catch(e){PUSHST="off"}}
+async function pushEnable(){
+ PUSHERR="";
+ try{
+  if(!pushOK())throw new Error("This browser cannot show notifications.");
+  var perm=await Notification.requestPermission();
+  if(perm!=="granted"){PUSHST=perm==="denied"?"blocked":"off";return}
+  var reg=await navigator.serviceWorker.ready;
+  var sub=await reg.pushManager.getSubscription()||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(PUSH_KEY)});
+  await pushSave(sub);pushSavedFor=S.user?S.user.id:null;PUSHST="on"
+ }catch(e){PUSHERR=e.message||String(e)}}
+function pushHtml(){
+ if(PUSHST==="off")return '<div class="'+PUSH_CARD+'" style="display:block"><b>Order updates</b><br><small>Get notifications on this phone.</small><div style="margin-top:8px"><button class="btn sm" data-a="pushon">Turn on notifications</button></div>'+(PUSHERR?'<div class="err">'+esc(PUSHERR)+'</div>':'')+'</div>';
+ if(PUSHST==="install")return '<div class="'+PUSH_CARD+'" style="display:block"><b>Order updates</b><br><small>To get notifications on iPhone: tap Share, then Add to Home Screen. Open the app from your Home Screen and turn on notifications there.</small></div>';
+ if(PUSHST==="blocked")return '<div class="'+PUSH_CARD+'" style="display:block"><b>Notifications are blocked</b><br><small>Turn them on for this app in your phone settings.</small></div>';
+ return ''}
+document.addEventListener("click",async function(e){var b=e.target.closest&&e.target.closest('[data-a="pushon"]');if(!b)return;await pushEnable();render()});
+pushCheck().then(function(){render()});
+setInterval(function(){if(PUSHST==="on"&&typeof S!=="undefined"&&S.user&&pushSavedFor!==S.user.id){pushSavedFor=S.user.id;navigator.serviceWorker.getRegistration().then(function(r){return r&&r.pushManager.getSubscription()}).then(function(sub){if(sub)return pushSave(sub)}).catch(function(){pushSavedFor=null})}},5000);
+setInterval(function(){if(S.user&&S.role&&S.role!=="customer"&&!document.hidden){Promise.all([loadOrders(),loadCarts()]).then(function(){if(S.view==="orders")render();else{var e=document.getElementById("abar");if(e)e.innerHTML=barHtml()}alertNew()})}},20000);
 render();whoami();
-</script></body></html>
+</script><script>if('serviceWorker' in navigator)window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){})})</script>
+</body></html>
