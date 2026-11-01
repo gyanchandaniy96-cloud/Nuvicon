@@ -298,16 +298,19 @@ async function loadPartners(){
 async function loadCredit(){
  var r=await sb.rpc("credit_overview");
  if(r.error)S.loadErr=r.error.message;else S.credit=r.data||[]}
+function stmtText(d){
+ var L=(d.lines||[]).map(function(x){var sg=(x.type==="bill"||x.type==="intchg")?"":"- ";return x.d+"  "+x.text+"  "+sg+"₹"+Number(x.amt).toLocaleString("en-IN")});
+ return (L.length?L.join("\n"):"No entries yet")+"\n\nBills still to pay: ₹"+Number(d.bills_due).toLocaleString("en-IN")+"\nLate interest earned: ₹"+Number(d.interest_accrued).toLocaleString("en-IN")+"\nLate interest to pay: ₹"+Number(d.interest_due).toLocaleString("en-IN")+"\nDeposit interest earned (to be credited on the yearly date): ₹"+Number(d.sd_interest_pending).toLocaleString("en-IN")+"\n\nRates: 1.3% per month on a bill unpaid after 30 days (per day, unpaid part only). 6% per year on the security deposit."}
 function creditV(){
  var cf=S.cf;
  return '<h1>Credit customers</h1>'+backBtn()+
- '<div class="card" style="background:#f6f5f1;margin-top:8px"><small>The credit limit equals the Security Deposit (SD). Daily cash customers are not affected. The customer must have logged in to the app once.</small></div>'+
+ '<div class="card" style="background:#f6f5f1;margin-top:8px"><small>The credit limit equals the Security Deposit (SD). Daily cash customers are not affected. The customer must have logged in to the app once.<br>Interest: you pay the customer 6% per year on the SD (credited once a year, reduces what he owes). If a credit bill is not paid within 30 days, he pays 1.3% per month on the unpaid part. The late interest is shown separately. Every payment you record clears the late interest first and then the oldest bills. Use "Interest received" only when he pays just the interest.</small></div>'+
  '<div class="card"><b>Enable credit</b><input data-cf="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="Customer’s 10-digit number" value="'+esc(cf.phone)+'" style="margin-top:8px"><input data-cf="sd" type="number" inputmode="numeric" placeholder="Security deposit (₹)" value="'+esc(cf.sd)+'"><button class="btn" data-a="cset">Save</button></div>'+
  (S.loadErr?'<div class="err">'+esc(S.loadErr)+'</div>':'')+
  (S.credit.length?S.credit.map(function(c){
   return '<div class="card"><div class="flex"><div><b>'+esc(c.name||("+"+c.phone))+'</b> <span class="pill">'+(c.enabled?'Credit on':'Off')+'</span><br><small>+'+esc(c.phone)+'</small></div></div>'+
-  '<div class="stat" style="margin:8px 0"><div><small>SD / limit</small><b>'+fmt(c.sd)+'</b></div><div><small>Outstanding</small><b'+(c.used>0?' style="color:#b3392f"':'')+'>'+fmt(c.used)+'</b></div><div><small>Available limit</small><b>'+fmt(c.available)+'</b></div></div>'+
-  '<div class="flex"><button class="btn sm" data-a="cpay" data-id="'+esc(c.phone)+'">Payment received</button><button class="btn ghost sm" data-a="csd" data-id="'+esc(c.phone)+'" data-sd="'+c.sd+'" data-en="'+(c.enabled?1:0)+'">Change SD</button><button class="btn ghost sm" data-a="ctog" data-id="'+esc(c.phone)+'" data-sd="'+c.sd+'" data-en="'+(c.enabled?1:0)+'">'+(c.enabled?'Turn off':'Turn on')+'</button></div></div>'}).join(""):'<div class="empty">No credit customers yet.</div>')}
+  '<div class="stat" style="margin:8px 0"><div><small>SD / limit</small><b>'+fmt(c.sd)+'</b></div><div><small>Outstanding</small><b'+(c.used>0?' style="color:#b3392f"':'')+'>'+fmt(c.used)+'</b></div><div><small>Available limit</small><b>'+fmt(c.available)+'</b></div></div>'+(Number(c.interest_due)>0?'<div style="color:#b3392f;font-weight:700;margin-bottom:6px">Late interest to collect: '+fmt(c.interest_due)+'</div>':'')+(Number(c.sd_interest_pending)>0?'<div style="color:#1f7a4d;margin-bottom:6px"><small>SD interest earned so far: '+fmt(c.sd_interest_pending)+' (credited yearly)</small></div>':'')+
+  '<div class="flex"><button class="btn sm" data-a="cpay" data-id="'+esc(c.phone)+'">Payment received</button>'+(Number(c.interest_due)>0?'<button class="btn sm" data-a="cint" data-id="'+esc(c.phone)+'">Interest received</button>':'')+'<button class="btn ghost sm" data-a="cstm" data-id="'+esc(c.phone)+'">Statement</button><button class="btn ghost sm" data-a="csd" data-id="'+esc(c.phone)+'" data-sd="'+c.sd+'" data-en="'+(c.enabled?1:0)+'">Change SD</button><button class="btn ghost sm" data-a="ctog" data-id="'+esc(c.phone)+'" data-sd="'+c.sd+'" data-en="'+(c.enabled?1:0)+'">'+(c.enabled?'Turn off':'Turn on')+'</button></div></div>'}).join(""):'<div class="empty">No credit customers yet.</div>')}
 function dlCsv(name,rows){
  var q=function(v){v=v==null?"":String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
  var txt="﻿"+rows.map(function(r){return r.map(q).join(",")}).join("\r\n");
@@ -549,11 +552,19 @@ document.addEventListener("click",async function(e){
   var cw2=await why(a==="csd"?"Changing SD":(en1?"Credit on":"Credit off"),true);if(cw2===null)return;
   var cr2=await sb.rpc("set_credit",{p_phone:id,p_enabled:en1,p_sd:sd1,p_reason:cw2});
   if(cr2.error)showAlert(cr2.error.message);else{toast("Saved");await loadCredit()}}
+ else if(a==="cstm"){
+  var sr=await sb.rpc("credit_statement",{p_phone:id});
+  if(sr.error)showAlert(sr.error.message);else showAlert(stmtText(sr.data))}
+ else if(a==="cint"){
+  var ci=S.credit.find(function(x){return x.phone===id}),ia=await ask("Late interest received (₹). Amount due: ₹"+(ci?ci.interest_due:""),ci?ci.interest_due:"");if(ia===null)return;ia=Number(ia);if(!(ia>0)){showAlert("Invalid amount");return}
+  var inn=await ask("Note (cash / UPI / cheque), can be left empty","cash");if(inn===null)return;
+  var ir=await sb.rpc("record_interest_payment",{p_phone:id,p_amount:ia,p_note:inn});
+  if(ir.error)showAlert(ir.error.message);else{toast("Interest recorded");await loadCredit()}}
  else if(a==="cpay"){
   var am=await ask("How much did the customer pay? (₹)");if(am===null)return;am=Number(am);if(!(am>0)){showAlert("Invalid amount");return}
   var nt=await ask("Note (cash / UPI / cheque), can be left empty","cash");if(nt===null)return;
   var cr3=await sb.rpc("record_credit_payment",{p_phone:id,p_amount:am,p_note:nt});
-  if(cr3.error)showAlert(cr3.error.message);else{toast("Payment recorded");await loadCredit()}}
+  if(cr3.error)showAlert(cr3.error.message);else{var sp=cr3.data||{};await loadCredit();showAlert("Payment recorded.\nTo late interest: ₹"+Number(sp.interest||0).toLocaleString("en-IN")+"\nTo bills: ₹"+Number(sp.bills||0).toLocaleString("en-IN"))}}
  else if(a==="xsales"||a==="xexp"||a==="xcred"){
   var rg=prRange(),nm=rg[0]+"_to_"+rg[1];
   if(a==="xsales"){
