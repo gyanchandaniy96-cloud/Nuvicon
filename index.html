@@ -251,7 +251,7 @@ function sumry(a){var d=a.details||{};
 function backBtn(){return '<button class="btn ghost sm" data-a="go" data-id="more">&larr; More</button>'}
 function moreV(){
  var it=function(id,t,sub){return '<div class="card flex" data-a="go" data-id="'+id+'" style="cursor:pointer"><div><b>'+t+'</b><br><small>'+sub+'</small></div><span>&rsaquo;</span></div>'};
- return '<h1>More</h1>'+it("carts","Carts","Customers who left items in their cart")+(S.role==="admin"?it("staff","Staff","Add team members, change roles")+it("settings","Settings","Store timing, open/close, low stock limit")+it("partners","Partners","Transporters, vehicles, rate card")+it("credit","Credit customers","Security deposits and outstanding balances")+it("profit","Profit","Sales, costs, expenses and net profit (admin only)"):"")+it("audit","Audit log","A record of every change")+'<div class="card flex" data-a="out" style="cursor:pointer"><b>Log out</b><span>&rsaquo;</span></div>'}
+ return '<h1>More</h1>'+it("carts","Carts","Customers who left items in their cart")+(S.role==="admin"?it("staff","Staff","Add team members, change roles")+it("settings","Settings","Store timing, open/close, low stock limit")+it("partners","Partners","Transporters, vehicles, rate card")+it("areas","Delivery areas","Map boxes: extra fee, timing, stop delivery")+it("credit","Credit customers","Security deposits and outstanding balances")+it("profit","Profit","Sales, costs, expenses and net profit (admin only)"):"")+it("audit","Audit log","A record of every change")+'<div class="card flex" data-a="out" style="cursor:pointer"><b>Log out</b><span>&rsaquo;</span></div>'}
 function auditV(){
  var f=S.af,q=f.q.toLowerCase(),users={},acts={};
  S.audit.forEach(function(a){if(a.user_id)users[a.user_id]=1;acts[a.action]=1});
@@ -301,6 +301,53 @@ async function loadCredit(){
 function stmtText(d){
  var L=(d.lines||[]).map(function(x){var sg=(x.type==="bill"||x.type==="intchg")?"":"- ";return x.d+"  "+x.text+"  "+sg+"₹"+Number(x.amt).toLocaleString("en-IN")});
  return (L.length?L.join("\n"):"No entries yet")+"\n\nBills still to pay: ₹"+Number(d.bills_due).toLocaleString("en-IN")+"\nLate interest earned: ₹"+Number(d.interest_accrued).toLocaleString("en-IN")+"\nLate interest to pay: ₹"+Number(d.interest_due).toLocaleString("en-IN")+"\nDeposit interest earned (to be credited on the yearly date): ₹"+Number(d.sd_interest_pending).toLocaleString("en-IN")+"\n\nRates: 1.3% per month on a bill unpaid after 30 days (per day, unpaid part only). 6% per year on the security deposit."}
+var GHB="0123456789bcdefghjkmnpqrstuvwxyz";
+function ghEnc(lat,lng,n){var la=[-90,90],lo=[-180,180],bit=0,ch=0,ev=true,r="";while(r.length<n){var rg=ev?lo:la,v=ev?lng:lat,m=(rg[0]+rg[1])/2;if(v>=m){ch=ch*2+1;rg[0]=m}else{ch=ch*2;rg[1]=m}ev=!ev;if(++bit===5){r+=GHB[ch];bit=0;ch=0}}return r}
+function ghBox(gh){var la=[-90,90],lo=[-180,180],ev=true;for(var i=0;i<gh.length;i++){var c=GHB.indexOf(gh[i]);for(var b=4;b>=0;b--){var bit=(c>>b)&1,rg=ev?lo:la,m=(rg[0]+rg[1])/2;if(bit)rg[0]=m;else rg[1]=m;ev=!ev}}return {la:la,lo:lo}}
+function hav(a,b,c,d){var R=6371,t=Math.PI/180,x=(c-a)*t,y=(d-b)*t,h=Math.sin(x/2)*Math.sin(x/2)+Math.cos(a*t)*Math.cos(c*t)*Math.sin(y/2)*Math.sin(y/2);return 2*R*Math.asin(Math.sqrt(h))}
+async function loadAreas(){await loadCfg();var r=await sb.from("geo_cells").select("*");if(r.error)S.loadErr=r.error.message;else{S.cells={};(r.data||[]).forEach(function(c){S.cells[c.geohash]=c})}}
+function areasV(){
+ var g=S.cfg.godown,rad=Number(S.cfg.rad)||30,C=S.cells||{};
+ var head='<h1>Delivery areas</h1>'+backBtn()+'<div class="card" style="background:#f6f5f1;margin-top:8px"><small>The map around your godown is divided into boxes of about 5 km. Tap a box to give it an extra delivery fee, allow orders only between two times, or stop delivery there. Boxes without a rule work as normal (only the maximum distance rule applies).</small></div>';
+ if(!g||g.lat==null)return head+'<div class="err">First set the godown location (Settings).</div>';
+ var c0=ghEnc(g.lat,g.lng,5),bx=ghBox(c0),dla=bx.la[1]-bx.la[0],dlo=bx.lo[1]-bx.lo[0],clat=(bx.la[0]+bx.la[1])/2,clng=(bx.lo[0]+bx.lo[1])/2;
+ var N=Math.min(10,Math.ceil(rad/4.5)+1),Z=24,W=(2*N+1)*Z,seen={},cells=[];
+ for(var dy=-N;dy<=N;dy++)for(var dx=-N;dx<=N;dx++){var la=clat+dy*dla,lo=clng+dx*dlo,gh=ghEnc(la,lo,5);if(seen[gh])continue;seen[gh]=1;cells.push({gh:gh,dx:dx,dy:dy,d:hav(g.lat,g.lng,la,lo)})}
+ var svg='<svg viewBox="0 0 '+W+' '+W+'" style="width:100%;max-width:520px;display:block;margin:8px auto;background:#fff;border:1px solid #d6d3cb;border-radius:8px">';
+ cells.forEach(function(c){var r=C[c.gh],inside=c.d<=rad+3,fill=!inside?'#ececec':r?(r.active===false?'#e8a09a':(Number(r.extra_fee)>0||r.opens)?'#f2d37a':'#cfe8d5'):'#cfe8d5';
+  var x=(c.dx+N)*Z,y=(N-c.dy)*Z,tx=r?(r.active===false?'✕':Number(r.extra_fee)>0?'+'+Number(r.extra_fee):r.opens?'⏱':''):'';
+  svg+='<g data-a="cell" data-id="'+c.gh+'" style="cursor:pointer"><rect x="'+x+'" y="'+y+'" width="'+Z+'" height="'+Z+'" fill="'+fill+'" stroke="#fff" stroke-width="1"/>'+(c.gh===c0?'<circle cx="'+(x+Z/2)+'" cy="'+(y+Z/2)+'" r="4" fill="#14191c"/>':'')+(tx?'<text x="'+(x+Z/2)+'" y="'+(y+Z/2+(c.gh===c0?12:3))+'" font-size="8" text-anchor="middle" fill="#14191c" pointer-events="none">'+tx+'</text>':'')+'</g>'});
+ svg+='</svg>';
+ var legend='<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:12px;margin:4px 0 10px"><span><i style="display:inline-block;width:12px;height:12px;background:#cfe8d5;border-radius:2px"></i> normal</span><span><i style="display:inline-block;width:12px;height:12px;background:#f2d37a;border-radius:2px"></i> extra fee / timing</span><span><i style="display:inline-block;width:12px;height:12px;background:#e8a09a;border-radius:2px"></i> no delivery</span><span><i style="display:inline-block;width:12px;height:12px;background:#ececec;border-radius:2px"></i> outside max distance</span><span>&#9679; godown</span></div>';
+ var rules=Object.keys(C).map(function(k){return C[k]}).sort(function(a,b){return a.geohash<b.geohash?-1:1});
+ return head+svg+legend+(rules.length?'<b>Boxes with rules</b>'+rules.map(function(r){return '<div class="card flex"><div><b>'+esc(r.name||r.geohash)+'</b> <small>('+esc(r.geohash)+')</small><br><small>'+(r.active===false?'No delivery':'Delivers')+(Number(r.extra_fee)>0?', extra fee ₹'+Number(r.extra_fee):'')+(r.opens?', orders only '+String(r.opens).slice(0,5)+' to '+String(r.closes).slice(0,5):'')+'</small></div><button class="btn sm" data-a="cell" data-id="'+esc(r.geohash)+'">Edit</button></div>'}).join(""):'<div class="empty">No area rules yet. Tap a box on the map.</div>')}
+function cellForm(gh){
+ var r=(S.cells||{})[gh]||{},bx=ghBox(gh);
+ var ov=document.createElement("div");ov.style.cssText="position:fixed;inset:0;background:rgba(20,25,28,.55);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto";
+ var c=document.createElement("div");c.style.cssText="background:#fff;border-radius:12px;padding:18px;width:100%;max-width:380px;margin:auto;box-shadow:0 10px 40px rgba(0,0,0,.3)";
+ c.innerHTML='<div style="font-weight:800;font-size:16px">Area box '+esc(gh)+'</div><small>Centre about '+((bx.la[0]+bx.la[1])/2).toFixed(3)+', '+((bx.lo[0]+bx.lo[1])/2).toFixed(3)+'</small>'+
+  '<label style="display:block;margin-top:10px;font-weight:700">Area name (optional)</label><input id="cn" value="'+esc(r.name||"")+'" placeholder="e.g. Deothana side">'+
+  '<label style="display:block;margin-top:6px;font-weight:700">Extra delivery fee (₹)</label><input id="cf" type="number" inputmode="decimal" value="'+(r.extra_fee!=null?Number(r.extra_fee):0)+'">'+
+  '<label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-weight:700"><input id="ca" type="checkbox" style="width:auto"'+(r.active===false?'':' checked')+'> We deliver to this area</label>'+
+  '<label style="display:block;margin-top:8px;font-weight:700">Orders allowed only between (leave empty = all day)</label><div style="display:flex;gap:8px"><input id="co" type="time" value="'+(r.opens?String(r.opens).slice(0,5):"")+'"><input id="cc" type="time" value="'+(r.closes?String(r.closes).slice(0,5):"")+'"></div>'+
+  '<label style="display:block;margin-top:8px;font-weight:700">Reason (required)</label><input id="cr" placeholder="why you are changing this">'+
+  '<div id="ce" class="err" style="display:none"></div>'+
+  '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap"><button class="btn ghost" id="cx" style="flex:1">Cancel</button>'+(r.geohash?'<button class="btn bad" id="cd" style="flex:1">Remove rule</button>':'')+'<button class="btn" id="cs" style="flex:1">Save</button></div>';
+ ov.appendChild(c);document.body.appendChild(ov);
+ var close=function(){ov.remove()},err=function(m){var e=c.querySelector("#ce");e.textContent=m;e.style.display="block"};
+ c.querySelector("#cx").onclick=close;
+ c.querySelector("#cs").onclick=async function(){
+  var rs=c.querySelector("#cr").value.trim();if(!rs){err("A reason is required");return}
+  var o=c.querySelector("#co").value,cl=c.querySelector("#cc").value;if(!!o!==!!cl){err("Give both times, or leave both empty");return}
+  var ex=Number(c.querySelector("#cf").value||0);if(!(ex>=0)){err("Invalid fee");return}
+  var res=await sb.rpc("set_geo_cell",{p_geohash:gh,p_name:c.querySelector("#cn").value,p_active:c.querySelector("#ca").checked,p_extra:ex,p_opens:o||null,p_closes:cl||null,p_reason:rs});
+  if(res.error){err(res.error.message);return}
+  close();toast("Saved");await loadAreas();render()};
+ var d=c.querySelector("#cd");if(d)d.onclick=async function(){
+  var rs=c.querySelector("#cr").value.trim();if(!rs){err("A reason is required");return}
+  var res=await sb.rpc("delete_geo_cell",{p_geohash:gh,p_reason:rs});
+  if(res.error){err(res.error.message);return}
+  close();toast("Rule removed");await loadAreas();render()}}
 function creditV(){
  var cf=S.cf;
  return '<h1>Credit customers</h1>'+backBtn()+
@@ -378,9 +425,9 @@ function partnersV(){
  '<div class="card flex" style="margin-top:12px"><div><b>Default fee</b><br><small>Used only when an order has no distance: '+fmt(S.cfg.dfee)+'</small></div><button class="btn sm" data-a="dfee">Change</button></div><h1 style="font-size:16px">Rate card (fee paid to the partner)</h1><small>Used only when an order has no distance (zone orders). Orders with a distance use the automatic fee above.</small><div style="margin-top:8px"></div>'+
  S.zones.filter(function(z){return z.active}).map(function(z){var r=rate(z.id);return '<div class="card flex"><div><b>'+esc(z.name)+'</b><br><small>'+(r==null?'Fee not set':fmt(r))+'</small></div><button class="btn sm" data-a="rate" data-id="'+z.id+'">'+(r==null?'Set':'Change')+'</button></div>'}).join("")}
 function viewHtml(){var v=S.view;
- if((v==="staff"||v==="settings"||v==="partners"||v==="credit"||v==="profit"||v==="costs")&&S.role!=="admin")v="more";
- return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="carts"?cartsV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():v==="partners"?partnersV():v==="credit"?creditV():v==="profit"?profitV():v==="costs"?costsV():catV()}
-function navOn(t){var v=S.view;return v===t||(t==="stock"&&(v==="bulk"||v==="bill"))||(t==="more"&&(v==="staff"||v==="settings"||v==="audit"||v==="partners"||v==="credit"||v==="profit"||v==="costs"))}
+ if((v==="staff"||v==="settings"||v==="partners"||v==="credit"||v==="areas"||v==="profit"||v==="costs")&&S.role!=="admin")v="more";
+ return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="carts"?cartsV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():v==="partners"?partnersV():v==="credit"?creditV():v==="areas"?areasV():v==="profit"?profitV():v==="costs"?costsV():catV()}
+function navOn(t){var v=S.view;return v===t||(t==="stock"&&(v==="bulk"||v==="bill"))||(t==="more"&&(v==="staff"||v==="settings"||v==="audit"||v==="partners"||v==="credit"||v==="areas"||v==="profit"||v==="costs"))}
 function stk(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<1?["out","Out"]:a<=S.cfg.low?["low","Low"]:["ok","OK"]}
 function stockV(){
  var s=S.q.toLowerCase(),vs=S.inv.filter(function(v){return (v.products.brand+" "+v.products.name+" "+v.label).toLowerCase().indexOf(s)>-1});
@@ -422,7 +469,7 @@ function render(){
 document.addEventListener("click",async function(e){
  var b=e.target.closest("[data-a]");if(!b||b.disabled)return;
  var a=b.dataset.a,id=b.dataset.id,y=window.scrollY;S.err="";
- if(a==="go"){S.view=id;S.q="";S.loadErr="";if(id==="staff")await loadStaff();else if(id==="audit")await loadAudit();else if(id==="settings")await loadCfg();else if(id==="partners")await loadPartners();else if(id==="credit")await loadCredit();else if(id==="profit")await loadProfit();else if(id==="costs")await loadCosts();else if(id==="carts")await loadCarts()}
+ if(a==="go"){S.view=id;S.q="";S.loadErr="";if(id==="staff")await loadStaff();else if(id==="audit")await loadAudit();else if(id==="settings")await loadCfg();else if(id==="partners")await loadPartners();else if(id==="credit")await loadCredit();else if(id==="areas")await loadAreas();else if(id==="profit")await loadProfit();else if(id==="costs")await loadCosts();else if(id==="carts")await loadCarts()}
  else if(a==="f")S.f=id;
  else if(a==="tog")S.open[id]=!S.open[id];
  else if(a==="back"){S.step="phone";S.otp=""}
@@ -552,6 +599,7 @@ document.addEventListener("click",async function(e){
   var cw2=await why(a==="csd"?"Changing SD":(en1?"Credit on":"Credit off"),true);if(cw2===null)return;
   var cr2=await sb.rpc("set_credit",{p_phone:id,p_enabled:en1,p_sd:sd1,p_reason:cw2});
   if(cr2.error)showAlert(cr2.error.message);else{toast("Saved");await loadCredit()}}
+ else if(a==="cell"){cellForm(id)}
  else if(a==="cstm"){
   var sr=await sb.rpc("credit_statement",{p_phone:id});
   if(sr.error)showAlert(sr.error.message);else showAlert(stmtText(sr.data))}
