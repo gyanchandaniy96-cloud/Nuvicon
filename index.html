@@ -775,6 +775,7 @@ document.addEventListener("click",async function(e){
  else if(a==="vis"){
   var v3=S.inv.find(function(x){return x.id==id});var rv=await why(v3.active?"Hiding":"Showing",true);if(rv===null)return;
   var r6=await sb.from("variants").update({active:!v3.active}).eq("id",id);
+  if(!r6.error&&!v3.active)await sb.from("products").update({active:true}).eq("id",v3.product_id);
   if(r6.error)showAlert(r6.error.message);else{await audit("visibility","variants",id,{active:!v3.active,reason:rv});await loadInv()}}
  render();window.scrollTo(0,y)});
 document.addEventListener("input",function(e){
