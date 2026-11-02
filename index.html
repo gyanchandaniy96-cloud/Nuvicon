@@ -62,7 +62,7 @@ async function loadOrders(){
  var r=await sb.from("orders").select("id,order_no,total,subtotal,gst_total,delivery_fee,delivery_gst,status,pay_status,pay_method,gstin,firm_name,address,created_at,profiles(phone,full_name),zones(name),order_items(product_name,variant_label,qty,unit_price,variants(fee_basis,weight_kg)),partner_id,vehicle_id,partner_fee,cod_collected,partners(name,phone),vehicles(reg_no),area_text,delivery_lat,delivery_lng,distance_km").order("created_at",{ascending:false}).limit(200);
  if(r.error){S.loadErr=r.error.message}else{S.orders=r.data;S.loadErr=""}}
 async function loadInv(){
- var r=await sb.from("variants").select("id,label,price,active,product_id,fee_basis,weight_kg,blocks_per_cbm,price_per_kg,products(brand,name,gst_percent,category),bulk_prices(id,min_qty,price),inventory(total,reserved)").order("product_id").order("id");
+ var r=await sb.from("variants").select("id,label,price,active,product_id,fee_basis,weight_kg,price_per_kg,products(brand,name,gst_percent,category),bulk_prices(id,min_qty,price),inventory(total,reserved)").order("product_id").order("id");
  if(r.error){S.loadErr=r.error.message}else{S.inv=r.data.map(function(v){v.inv=Array.isArray(v.inventory)?v.inventory[0]:v.inventory;return v})}}
 async function loadAll(){await Promise.all([loadOrders(),loadInv(),loadCfg(),loadPartners()])}
 async function loadCarts(){var r=await sb.rpc("abandoned_carts");if(!r.error&&Array.isArray(r.data))S.carts=r.data}
@@ -487,9 +487,9 @@ document.addEventListener("click",async function(e){
   if(r3.error){showAlert(r3.error.message)}else{toast("Order updated");if(rs0)await audit("order_note","orders",id,{reason:rs0})}
   await loadAll()}
  else if(a==="recv"){
-  var v=S.inv.find(function(x){return x.id==id}),wt=v.fee_basis==="weight"&&Number(v.weight_kg)>0,cb=Number(v.blocks_per_cbm)>0,q=await ask(cb?"Cubic metres (CBM) received for "+v.products.name+" ("+v.label+"). 1 CBM = "+v.blocks_per_cbm+" blocks":wt?"Weight received in kg for "+v.products.name+" ("+v.label+"). 1 rod = "+v.weight_kg+" kg":"Quantity received for "+v.products.name+" ("+v.label+")");
+  var v=S.inv.find(function(x){return x.id==id}),wt=v.fee_basis==="weight"&&Number(v.weight_kg)>0,q=await ask(wt?"Weight received in kg for "+v.products.name+" ("+v.label+"). 1 rod = "+v.weight_kg+" kg":"Quantity received for "+v.products.name+" ("+v.label+")");
   if(q===null)return;
-  q=cb?Math.round(parseFloat(q)*Number(v.blocks_per_cbm)):wt?Math.round(parseFloat(q)/Number(v.weight_kg)):parseInt(q,10);
+  q=wt?Math.round(parseFloat(q)/Number(v.weight_kg)):parseInt(q,10);
   if(q>0){var rr=await why("Stock receive",false);if(rr===null)return;var tot=(v.inv?v.inv.total:0)+q;
    var r4=await sb.from("inventory").upsert({variant_id:+id,total:tot,last_received:new Date().toISOString().slice(0,10)});
    if(r4.error)showAlert(r4.error.message);else{await audit("stock_received","inventory",id,{qty:q,total:tot,reason:rr});toast("Stock updated");await loadInv()}}}
