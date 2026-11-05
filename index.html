@@ -49,7 +49,7 @@ function gi(g){return 1+Number(g)/100}
 function rnd4(x){return Math.round(x*10000)/10000}
 function toast(m){var t=document.getElementById("toast");t.innerHTML='<div class="toast">'+esc(m)+'</div>';setTimeout(function(){t.innerHTML=""},2500)}
 function dt(s){return new Date(s).toLocaleString("en-IN",{timeZone:"Asia/Kolkata",day:"numeric",month:"short",hour:"numeric",minute:"2-digit"})}
-async function audit(a,e,id,d){try{await sb.rpc("log_audit",{p_action:a,p_entity:e,p_id:String(id),p_details:d})}catch(x){}}
+async function audit(a,e,id,d){try{await sb.rpc("audit_staff",{p_action:a,p_entity:e,p_id:String(id),p_details:d})}catch(x){}}
 async function whoami(){
  var r=await sb.auth.getSession();
  if(!r.data.session){S.user=null;S.role=null;S.boot=false;return render()}
@@ -84,6 +84,13 @@ function reqsV(){
  (l.length?l.map(function(c){var ph=String(c.phone||"").replace(/\D/g,"");
   return '<div class="card"><div class="flex"><div><b>'+esc(c.name)+'</b>'+(c.details?'<br><small>'+esc(c.details)+'</small>':'')+'<br><small>'+esc(c.full_name||"Customer")+', +'+esc(ph)+', '+esc(String(c.created_at).slice(0,10))+'</small></div>'+(c.status==="new"?'<span class="pill warn">New</span>':'<span class="pill ok">Done</span>')+'</div>'+
    '<div class="flex" style="gap:8px;margin-top:6px"><a class="btn sm" href="tel:+'+ph+'" style="text-decoration:none;text-align:center">Call</a><a class="btn sm" href="https://wa.me/'+ph+'" target="_blank" rel="noopener" style="text-decoration:none;text-align:center">WhatsApp</a>'+(c.status==="new"?'<button class="btn ghost sm" data-a="rdone" data-id="'+c.id+'">Done</button>':'')+'</div></div>'}).join(""):'<div class="empty">No requests yet.</div>')}
+async function loadDmg(){var r=await sb.rpc("damage_reports_list");S.dmg=(!r.error&&Array.isArray(r.data))?r.data:[]}
+function dmgV(){
+ var l=S.dmg||[];
+ return '<h1>Damage reports</h1><button class="btn ghost sm" data-a="go" data-id="more">&larr; More</button><small style="display:block;margin:8px 0">No returns. Refund or replacement only for a damaged product reported within 24 hours of delivery. For an online payment, do the refund in your Razorpay/Cashfree dashboard, then press Refund here to record it.</small>'+
+ (l.length?l.map(function(c){var ph=String(c.phone||"").replace(/\D/g,""),st=c.status;
+  return '<div class="card"><div class="flex"><div><b>Order '+esc(c.order_no)+'</b> '+fmt(c.total)+'<br><small>'+esc(c.full_name||"Customer")+', +'+esc(ph)+'</small><br><small>'+esc(c.items||"")+'</small><br>Report: '+esc(c.note)+'<br><small>Paid by '+esc(c.pay_method==="on_delivery"?"cash on delivery":c.pay_method)+' ('+esc(c.pay_status)+')</small>'+(c.admin_note?'<br><small>Note: '+esc(c.admin_note)+'</small>':'')+'</div>'+(st==="new"?'<span class="pill warn">New</span>':'<span class="pill ok">'+esc(st)+(c.amount?' '+fmt(c.amount):'')+'</span>')+'</div>'+
+   '<div class="flex" style="gap:8px;margin-top:6px;flex-wrap:wrap"><a class="btn sm" href="tel:+'+ph+'" style="text-decoration:none;text-align:center">Call</a><a class="btn sm" href="https://wa.me/'+ph+'" target="_blank" rel="noopener" style="text-decoration:none;text-align:center">WhatsApp</a>'+(st==="new"&&S.role==="admin"?'<button class="btn sm" data-a="dres" data-id="'+c.id+'" data-s="replacement">Replace</button><button class="btn sm" data-a="dres" data-id="'+c.id+'" data-s="refund">Refund</button><button class="btn ghost sm" data-a="dres" data-id="'+c.id+'" data-s="rejected">Reject</button>':'')+'</div></div>'}).join(""):'<div class="empty">No damage reports.</div>')}
 function cartBar(){var n=(S.carts||[]).length;return n?'<div style="background:#F2B705;color:#1d2428;border-radius:8px;padding:10px 12px;margin:10px 0"><b>'+n+' cart'+(n>1?'s':'')+' waiting for a call</b><div style="margin-top:8px"><button class="btn sm" data-a="go" data-id="carts">Open carts</button></div></div>':''}
 function barHtml(){return barHtml0()+pushHtml()}
 function barHtml0(){var od=overdue();if(!od.length)return cartBar();return cartBar()+'<div style="background:#b3392f;color:#fff;border-radius:8px;padding:10px 12px;margin:10px 0"><b>'+od.length+' order'+(od.length>1?'s':'')+' not assigned for '+ALERT_MIN+'+ minutes</b><br><small>'+od.map(function(o){return '#'+esc(o.order_no)}).join(', ')+'</small><div style="margin-top:8px"><button class="btn sm" data-a="go" data-id="orders">Open orders</button></div></div>'}
@@ -276,7 +283,7 @@ function sumry(a){var d=a.details||{};
 function backBtn(){return '<button class="btn ghost sm" data-a="go" data-id="more">&larr; More</button>'}
 function moreV(){
  var it=function(id,t,sub){return '<div class="card flex" data-a="go" data-id="'+id+'" style="cursor:pointer"><div><b>'+t+'</b><br><small>'+sub+'</small></div><span>&rsaquo;</span></div>'};
- return '<h1>More</h1>'+it("carts","Carts","Customers who left items in their cart")+it("reqs","Product requests","Items customers asked us to add")+(S.role==="admin"?it("staff","Staff","Add team members, change roles")+it("settings","Settings","Store timing, open/close, low stock limit")+it("partners","Partners","Transporters, vehicles, rate card")+it("areas","Delivery areas","Map boxes: extra fee, timing, stop delivery")+it("credit","Credit customers","Security deposits and outstanding balances")+it("profit","Profit","Sales, costs, expenses and net profit (admin only)"):"")+it("audit","Audit log","A record of every change")+'<div class="card flex" data-a="out" style="cursor:pointer"><b>Log out</b><span>&rsaquo;</span></div>'}
+ return '<h1>More</h1>'+it("carts","Carts","Customers who left items in their cart")+it("reqs","Product requests","Items customers asked us to add")+it("dmg","Damage reports","Damaged maal ke refund / replacement")+(S.role==="admin"?it("staff","Staff","Add team members, change roles")+it("settings","Settings","Store timing, open/close, low stock limit")+it("partners","Partners","Transporters, vehicles, rate card")+it("areas","Delivery areas","Map boxes: extra fee, timing, stop delivery")+it("credit","Credit customers","Security deposits and outstanding balances")+it("profit","Profit","Sales, costs, expenses and net profit (admin only)"):"")+it("audit","Audit log","A record of every change")+'<div class="card flex" data-a="out" style="cursor:pointer"><b>Log out</b><span>&rsaquo;</span></div>'}
 function auditV(){
  var f=S.af,q=f.q.toLowerCase(),users={},acts={};
  S.audit.forEach(function(a){if(a.user_id)users[a.user_id]=1;acts[a.action]=1});
@@ -451,7 +458,7 @@ function partnersV(){
  S.zones.filter(function(z){return z.active}).map(function(z){var r=rate(z.id);return '<div class="card flex"><div><b>'+esc(z.name)+'</b><br><small>'+(r==null?'Fee not set':fmt(r))+'</small></div><button class="btn sm" data-a="rate" data-id="'+z.id+'">'+(r==null?'Set':'Change')+'</button></div>'}).join("")}
 function viewHtml(){var v=S.view;
  if((v==="staff"||v==="settings"||v==="partners"||v==="credit"||v==="areas"||v==="profit"||v==="costs")&&S.role!=="admin")v="more";
- return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="carts"?cartsV():v==="reqs"?reqsV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():v==="partners"?partnersV():v==="credit"?creditV():v==="areas"?areasV():v==="profit"?profitV():v==="costs"?costsV():catV()}
+ return v==="orders"?ordersV():v==="stock"?stockV():v==="bulk"?bulkV():v==="bill"?billV():v==="more"?moreV():v==="carts"?cartsV():v==="reqs"?reqsV():v==="dmg"?dmgV():v==="staff"?staffV():v==="settings"?settingsV():v==="audit"?auditV():v==="partners"?partnersV():v==="credit"?creditV():v==="areas"?areasV():v==="profit"?profitV():v==="costs"?costsV():catV()}
 function navOn(t){var v=S.view;return v===t||(t==="stock"&&(v==="bulk"||v==="bill"))||(t==="more"&&(v==="staff"||v==="settings"||v==="audit"||v==="partners"||v==="credit"||v==="areas"||v==="profit"||v==="costs"))}
 function stk(v){var a=v.inv?v.inv.total-v.inv.reserved:0;return a<1?["out","Out"]:a<=S.cfg.low?["low","Low"]:["ok","OK"]}
 function stockV(){
@@ -494,7 +501,7 @@ function render(){
 document.addEventListener("click",async function(e){
  var b=e.target.closest("[data-a]");if(!b||b.disabled)return;
  var a=b.dataset.a,id=b.dataset.id,y=window.scrollY;S.err="";
- if(a==="go"){S.view=id;S.q="";S.loadErr="";if(id==="staff")await loadStaff();else if(id==="audit")await loadAudit();else if(id==="settings")await loadCfg();else if(id==="partners")await loadPartners();else if(id==="credit")await loadCredit();else if(id==="areas")await loadAreas();else if(id==="profit")await loadProfit();else if(id==="costs")await loadCosts();else if(id==="carts")await loadCarts();else if(id==="reqs")await loadReqs()}
+ if(a==="go"){S.view=id;S.q="";S.loadErr="";if(id==="staff")await loadStaff();else if(id==="audit")await loadAudit();else if(id==="settings")await loadCfg();else if(id==="partners")await loadPartners();else if(id==="credit")await loadCredit();else if(id==="areas")await loadAreas();else if(id==="profit")await loadProfit();else if(id==="costs")await loadCosts();else if(id==="carts")await loadCarts();else if(id==="reqs")await loadReqs();else if(id==="dmg")await loadDmg()}
  else if(a==="f")S.f=id;
  else if(a==="tog")S.open[id]=!S.open[id];
  else if(a==="back"){S.step="phone";S.otp=""}
@@ -817,6 +824,11 @@ document.addEventListener("click",async function(e){
   var q5=await ask("Phone on invoices (optional)",sl.phone||"");if(q5===null)return;sv.phone=q5.trim();
   var sr=await sb.from("settings").upsert({key:"seller",value:sv});
   if(sr.error)showAlert(sr.error.message);else{await audit("store_setting","settings","seller",{gstin:sv.gstin||""});S.cfg.seller=sv;toast("Saved");render()}}
+ else if(a==="dres"){
+  var ds=b.dataset.s,dam=null,dn=await ask(ds==="refund"?"Refund amount (₹) you are refunding for the damaged item":ds==="replacement"?"Note (optional): what you will send as replacement":"Reason for rejecting (optional)","");if(dn===null)return;
+  if(ds==="refund"){dam=parseFloat(dn);if(!(dam>0)){showAlert("Enter the refund amount");return}dn=await ask("Note (optional): how the refund is paid (gateway refund / adjusted in next order)","");if(dn===null)return}
+  var dq=await sb.rpc("resolve_damage",{p_id:+id,p_status:ds,p_amount:dam,p_note:dn});
+  if(dq.error)showAlert(dq.error.message);else{toast("Saved");await loadDmg()}}
  else if(a==="rdone"){var rd=await sb.rpc("product_request_done",{p_id:+id});if(rd.error)showAlert(rd.error.message);else{await loadReqs()}}
  else if(a==="vis"){
   var v3=S.inv.find(function(x){return x.id==id});var rv=await why(v3.active?"Hiding":"Showing",true);if(rv===null)return;
